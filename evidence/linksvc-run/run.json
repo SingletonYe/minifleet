@@ -1,0 +1,1243 @@
+{
+  "created_at": 1789039549.0073125,
+  "design": {
+    "components": [
+      {
+        "acceptance_ids": [
+          "A-1",
+          "A-4",
+          "A-5",
+          "A-6"
+        ],
+        "contract_ids": [
+          "C-INTERFACES"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "LinkStore.create/get/record_click/stats/count_links behave as specified",
+          "an idempotency key never creates a second link",
+          "expired links are reported as expired rather than missing",
+          "100 parallel record_click calls on one code add exactly 100 clicks"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "storage",
+        "name": "Durable link store",
+        "owns": [
+          "linksvc/storage.py",
+          "tests/test_storage.py"
+        ],
+        "responsibility": "Implement linksvc/storage.py: the SQLite-backed store with exact click counting and crash durability.",
+        "tests": [
+          "unit tests for create/alias/ttl/idempotency",
+          "a threaded test proving no clicks are lost"
+        ]
+      },
+      {
+        "acceptance_ids": [
+          "A-3"
+        ],
+        "contract_ids": [
+          "C-INTERFACES"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "allow() returns (True, 0.0) while tokens remain and (False, retry_after) once exhausted",
+          "tokens refill at the configured rate using a monotonic clock",
+          "the number of tracked keys is bounded (evict least recently used)"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "ratelimit",
+        "name": "Token bucket limiter",
+        "owns": [
+          "linksvc/ratelimit.py",
+          "tests/test_ratelimit.py"
+        ],
+        "responsibility": "Implement linksvc/ratelimit.py: a thread-safe token bucket with bounded memory that reports a retry-after hint.",
+        "tests": [
+          "deterministic tests with an injected clock",
+          "a test proving buckets are evicted"
+        ]
+      },
+      {
+        "acceptance_ids": [
+          "A-1",
+          "A-2",
+          "A-4",
+          "A-7",
+          "A-10"
+        ],
+        "contract_ids": [
+          "C-INTERFACES"
+        ],
+        "depends_on": [
+          "storage",
+          "ratelimit"
+        ],
+        "done_when": [
+          "every route in the contract answers with the specified status code and body",
+          "the process prints the MINIFLEET_READY line with the bound port",
+          "SIGTERM drains and exits 0",
+          "each request emits one JSON log line on stderr"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "http",
+        "name": "HTTP surface",
+        "owns": [
+          "linksvc/__init__.py",
+          "linksvc/api.py",
+          "linksvc/server.py",
+          "linksvc/__main__.py",
+          "tests/test_api.py"
+        ],
+        "responsibility": "Implement linksvc/__main__.py, linksvc/api.py, linksvc/server.py and linksvc/__init__.py: the HTTP API, routing, validation, ready line, logging and graceful shutdown.",
+        "tests": [
+          "an in-process test that starts the server on port 0 and drives the full API"
+        ]
+      }
+    ],
+    "contracts": [
+      {
+        "content": "## Required HTTP surface\n\n- `POST /links` body `{url, ttl_seconds?, alias?, idempotency_key?}` -> 201 `{code, short_url, url, created_at, expires_at}`; 400 invalid url/alias; 409 alias taken; 429 when rate limited.\n- `GET /{code}` -> 302 `Location: <url>` and records one click; 404 unknown; 410 expired.\n- `GET /links/{code}/stats` -> 200 `{code, url, clicks, created_at, expires_at}`; 404 unknown.\n- `GET /healthz` -> 200 `{\"status\": \"ok\"}`; `GET /readyz` -> 200 `{\"status\": \"ready\"}` once the store is open; `GET /metrics` -> 200 with at least `links_created`, `redirects`, `rate_limited`, `not_found` as numbers.\n\n## Required process behaviour\n\n- `python3 -m linksvc --host H --port P --db PATH --rate R --burst B`; port 0 means an ephemeral port.\n- On listening, print exactly one line to stdout: `MINIFLEET_READY {\"port\": <actual port>}`.\n- `SIGTERM` and `SIGINT` must drain in-flight requests and leave exit status 0.\n- Structured JSON log lines on stderr, one object per request.\n\n## Storage rules\n\n- SQLite with WAL and `synchronous=FULL`; one connection per thread or a serialising lock is acceptable.\n- Click counting must be a single atomic `UPDATE ... SET clicks = clicks + 1`.\n- `idempotency_key` is unique per key: a repeat returns the existing link instead of creating a second one.\n- Expiry is enforced at read time (`expires_at` in the past reads as expired).",
+        "exports": {
+          "linksvc.ratelimit.TokenBucketLimiter": "TokenBucketLimiter(rate: float, burst: int) with allow(key: str) -> tuple[bool, float] returning (allowed, retry_after_seconds)",
+          "linksvc.server.serve": "serve(host: str, port: int, db_path: str, rate: float, burst: int) -> int",
+          "linksvc.storage.Link": "dataclass(code: str, url: str, created_at: float, expires_at: float | None)",
+          "linksvc.storage.LinkStats": "dataclass(code: str, url: str, clicks: int, created_at: float, expires_at: float | None)",
+          "linksvc.storage.LinkStore": "LinkStore(db_path: str) with create(url, code=None, ttl_seconds=None, idempotency_key=None) -> Link, get(code) -> Link | None, record_click(code) -> None, stats(code) -> LinkStats | None, count_links() -> int, close() -> None",
+          "linksvc.storage.errors": "InvalidUrl, InvalidAlias, DuplicateAlias (all subclasses of StorageError)"
+        },
+        "frozen": true,
+        "id": "C-INTERFACES",
+        "path": "contracts/C-INTERFACES.md",
+        "summary": "Frozen module boundaries. Workers implement these exactly; they may not renegotiate them."
+      }
+    ],
+    "decisions": [
+      "acceptance criteria are owned by the verification layer, never by the worker that writes the code",
+      "every task has a single writer and a disjoint write scope; concurrency without ownership is a merge queue",
+      "frozen contracts: C-INTERFACES"
+    ],
+    "gates": [
+      {
+        "cmd": "python3 -m unittest discover -s tests -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-unit",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "task",
+        "threshold": 0.0,
+        "timeout": 600,
+        "title": "worker's own unit tests"
+      },
+      {
+        "cmd": "python3 -m unittest harness.test_accept -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-acceptance",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "HTTP contract conformance"
+      },
+      {
+        "cmd": "python3 -m unittest harness.test_concurrency -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-concurrency",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "no lost clicks under concurrency"
+      },
+      {
+        "cmd": "python3 -m unittest harness.test_durability -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-durability",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "crash durability and graceful shutdown"
+      },
+      {
+        "cmd": "python3 -m harness.perf_probe",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-perf",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "measure the redirect path"
+      },
+      {
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-budget-p99",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "budget",
+        "metric": "redirect_p99_ms",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 75.0,
+        "timeout": 300.0,
+        "title": "p99 latency budget"
+      },
+      {
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-budget-rps",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "budget",
+        "metric": "redirect_rps",
+        "op": ">=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 200.0,
+        "timeout": 300.0,
+        "title": "throughput budget"
+      },
+      {
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-layout",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "files",
+        "metric": "",
+        "op": "<=",
+        "paths": [
+          "linksvc/__main__.py",
+          "linksvc/storage.py",
+          "linksvc/ratelimit.py",
+          "linksvc/server.py",
+          "README.md",
+          "ACCEPTANCE.md"
+        ],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 300.0,
+        "title": "deliverable layout"
+      }
+    ],
+    "intent_id": "linksvc",
+    "repairs": [],
+    "risks": [
+      "non-functional criteria are only as trustworthy as the measurement harness"
+    ],
+    "tasks": [
+      {
+        "acceptance_ids": [
+          "A-1",
+          "A-4",
+          "A-5",
+          "A-6"
+        ],
+        "attempts": 1,
+        "branch": "task/storage",
+        "component_id": "storage",
+        "contract_ids": [
+          "C-INTERFACES"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "LinkStore.create/get/record_click/stats/count_links behave as specified",
+          "an idempotency key never creates a second link",
+          "expired links are reported as expired rather than missing",
+          "100 parallel record_click calls on one code add exactly 100 clicks"
+        ],
+        "evidence": [
+          {
+            "artifacts": [
+              "runs/20260910T112549Z-linksvc-c18a27/evidence/G-unit.json"
+            ],
+            "detail": "exit=0 (expected [0])",
+            "duration_s": 0.6249077320098877,
+            "exit_code": 0,
+            "gate_id": "G-unit",
+            "metrics": {},
+            "output_tail": "\ntest_parallel_clicks_are_never_lost (test_storage.ConcurrencyTests.test_parallel_clicks_are_never_lost) ... ok\ntest_writes_from_a_second_connection_are_visible (test_storage.ConcurrencyTests.test_writes_from_a_second_connection_are_visible) ... ok\ntest_create_generates_a_code_and_reads_back (test_storage.CreateTests.test_create_generates_a_code_and_reads_back) ... ok\ntest_custom_alias_is_honoured_and_conflicts_are_rejected (test_storage.CreateTests.test_custom_alias_is_honoured_and_conflicts_are_rejected) ... ok\ntest_idempotency_key_never_creates_a_second_link (test_storage.CreateTests.test_idempotency_key_never_creates_a_second_link) ... ok\ntest_invalid_urls_and_aliases_are_rejected (test_storage.CreateTests.test_invalid_urls_and_aliases_are_rejected) ... ok\ntest_stats_report_an_exact_click_count (test_storage.CreateTests.test_stats_report_an_exact_click_count) ... ok\ntest_ttl_sets_expiry_and_expired_links_are_still_readable (test_storage.CreateTests.test_ttl_sets_expiry_and_expired_links_are_still_readable) ... ok\ntest_committed_rows_survive_an_abrupt_process_death (test_storage.DurabilityTests.test_committed_rows_survive_an_abrupt_process_death) ... ok\ntest_database_uses_wal_and_full_synchronous (test_storage.DurabilityTests.test_database_uses_wal_and_full_synchronous) ... ok\n\n----------------------------------------------------------------------\nRan 10 tests in 0.537s\n\nOK\n",
+            "recorded_at": 1789039567.9320052,
+            "status": "pass",
+            "task_id": "T-storage"
+          }
+        ],
+        "finished_at": 1789039567.932394,
+        "gate_ids": [
+          "G-unit"
+        ],
+        "goal": "Implement linksvc/storage.py: the SQLite-backed store with exact click counting and crash durability.",
+        "id": "T-storage",
+        "notes": "",
+        "owns": [
+          "linksvc/storage.py",
+          "tests/test_storage.py"
+        ],
+        "role": "builder",
+        "started_at": 1789039550.8376875,
+        "state": "merged",
+        "submitted_files": [
+          "linksvc/storage.py",
+          "tests/test_storage.py"
+        ],
+        "tests": [
+          "unit tests for create/alias/ttl/idempotency",
+          "a threaded test proving no clicks are lost"
+        ],
+        "title": "Durable link store",
+        "worktree": "/home/user/workspace/minifleet/runs/20260910T112549Z-linksvc-c18a27/worktrees/storage"
+      },
+      {
+        "acceptance_ids": [
+          "A-3"
+        ],
+        "attempts": 2,
+        "branch": "task/ratelimit",
+        "component_id": "ratelimit",
+        "contract_ids": [
+          "C-INTERFACES"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "allow() returns (True, 0.0) while tokens remain and (False, retry_after) once exhausted",
+          "tokens refill at the configured rate using a monotonic clock",
+          "the number of tracked keys is bounded (evict least recently used)"
+        ],
+        "evidence": [
+          {
+            "artifacts": [
+              "runs/20260910T112549Z-linksvc-c18a27/evidence/G-unit.json"
+            ],
+            "detail": "exit=0 (expected [0])",
+            "duration_s": 0.059268951416015625,
+            "exit_code": 0,
+            "gate_id": "G-unit",
+            "metrics": {},
+            "output_tail": "\ntest_burst_is_allowed_then_the_next_call_is_refused_with_a_hint (test_ratelimit.AllowTests.test_burst_is_allowed_then_the_next_call_is_refused_with_a_hint) ... ok\ntest_keys_are_independent (test_ratelimit.AllowTests.test_keys_are_independent) ... ok\ntest_refill_uses_the_clock_rate (test_ratelimit.AllowTests.test_refill_uses_the_clock_rate) ... ok\ntest_retry_after_does_not_consume_a_token (test_ratelimit.AllowTests.test_retry_after_does_not_consume_a_token) ... ok\ntest_tokens_never_exceed_the_burst (test_ratelimit.AllowTests.test_tokens_never_exceed_the_burst) ... ok\ntest_unknown_key_has_no_wait (test_ratelimit.AllowTests.test_unknown_key_has_no_wait) ... ok\ntest_invalid_configuration_is_rejected (test_ratelimit.BoundedMemoryTests.test_invalid_configuration_is_rejected) ... ok\ntest_tracked_keys_stay_bounded_and_evict_least_recently_used (test_ratelimit.BoundedMemoryTests.test_tracked_keys_stay_bounded_and_evict_least_recently_used) ... ok\ntest_exactly_burst_threads_win_when_they_race (test_ratelimit.ThreadSafetyTests.test_exactly_burst_threads_win_when_they_race) ... ok\n\n----------------------------------------------------------------------\nRan 9 tests in 0.009s\n\nOK\n",
+            "recorded_at": 1789039582.8812096,
+            "status": "pass",
+            "task_id": "T-ratelimit"
+          }
+        ],
+        "finished_at": 1789039582.8816597,
+        "gate_ids": [
+          "G-unit"
+        ],
+        "goal": "Implement linksvc/ratelimit.py: a thread-safe token bucket with bounded memory that reports a retry-after hint.",
+        "id": "T-ratelimit",
+        "notes": "worker wrote outside its scope: ['linksvc/__pycache__/ratelimit.cpython-312.pyc', 'tests/__pycache__/test_ratelimit.cpython-312.pyc']",
+        "owns": [
+          "linksvc/ratelimit.py",
+          "tests/test_ratelimit.py"
+        ],
+        "role": "builder",
+        "started_at": 1789039550.8376894,
+        "state": "merged",
+        "submitted_files": [
+          "linksvc/ratelimit.py",
+          "tests/test_ratelimit.py"
+        ],
+        "tests": [
+          "deterministic tests with an injected clock",
+          "a test proving buckets are evicted"
+        ],
+        "title": "Token bucket limiter",
+        "worktree": "/home/user/workspace/minifleet/runs/20260910T112549Z-linksvc-c18a27/worktrees/ratelimit"
+      },
+      {
+        "acceptance_ids": [
+          "A-1",
+          "A-2",
+          "A-4",
+          "A-7",
+          "A-10"
+        ],
+        "attempts": 1,
+        "branch": "task/http",
+        "component_id": "http",
+        "contract_ids": [
+          "C-INTERFACES"
+        ],
+        "depends_on": [
+          "T-storage",
+          "T-ratelimit"
+        ],
+        "done_when": [
+          "every route in the contract answers with the specified status code and body",
+          "the process prints the MINIFLEET_READY line with the bound port",
+          "SIGTERM drains and exits 0",
+          "each request emits one JSON log line on stderr"
+        ],
+        "evidence": [
+          {
+            "artifacts": [
+              "runs/20260910T112549Z-linksvc-c18a27/evidence/G-unit.json"
+            ],
+            "detail": "exit=0 (expected [0])",
+            "duration_s": 1.741236686706543,
+            "exit_code": 0,
+            "gate_id": "G-unit",
+            "metrics": {},
+            "output_tail": "vel\": \"info\", \"method\": \"POST\", \"path\": \"/links\", \"remote\": \"127.0.0.1\", \"status\": 201, \"ts\": 1789039634.143143}\n{\"duration_ms\": 1.089, \"level\": \"info\", \"method\": \"POST\", \"path\": \"/links\", \"remote\": \"127.0.0.1\", \"status\": 201, \"ts\": 1789039634.144872}\n{\"duration_ms\": 0.155, \"level\": \"info\", \"method\": \"POST\", \"path\": \"/links\", \"remote\": \"127.0.0.1\", \"status\": 429, \"ts\": 1789039634.14582}\n{\"duration_ms\": 0.171, \"level\": \"info\", \"method\": \"GET\", \"path\": \"/metrics\", \"remote\": \"127.0.0.1\", \"status\": 200, \"ts\": 1789039634.146661}\nok\ntest_redirects_are_not_throttled_by_the_write_bucket (test_api.RateLimitTests.test_redirects_are_not_throttled_by_the_write_bucket) ... {\"duration_ms\": 0.964, \"level\": \"info\", \"method\": \"POST\", \"path\": \"/links\", \"remote\": \"127.0.0.1\", \"status\": 201, \"ts\": 1789039634.204493}\n{\"duration_ms\": 0.839, \"level\": \"info\", \"method\": \"GET\", \"path\": \"/RvrNP6d3\", \"remote\": \"127.0.0.1\", \"status\": 302, \"ts\": 1789039634.206221}\n{\"duration_ms\": 0.746, \"level\": \"info\", \"method\": \"GET\", \"path\": \"/RvrNP6d3\", \"remote\": \"127.0.0.1\", \"status\": 302, \"ts\": 1789039634.207734}\n{\"duration_ms\": 0.582, \"level\": \"info\", \"method\": \"GET\", \"path\": \"/RvrNP6d3\", \"remote\": \"127.0.0.1\", \"status\": 302, \"ts\": 1789039634.20902}\n{\"duration_ms\": 0.657, \"level\": \"info\", \"method\": \"GET\", \"path\": \"/RvrNP6d3\", \"remote\": \"127.0.0.1\", \"status\": 302, \"ts\": 1789039634.210325}\n{\"duration_ms\": 0.718, \"level\": \"info\", \"method\": \"GET\", \"path\": \"/RvrNP6d3\", \"remote\": \"127.0.0.1\", \"status\": 302, \"ts\": 1789039634.211661}\nok\ntest_burst_is_allowed_then_the_next_call_is_refused_with_a_hint (test_ratelimit.AllowTests.test_burst_is_allowed_then_the_next_call_is_refused_with_a_hint) ... ok\ntest_keys_are_independent (test_ratelimit.AllowTests.test_keys_are_independent) ... ok\ntest_refill_uses_the_clock_rate (test_ratelimit.AllowTests.test_refill_uses_the_clock_rate) ... ok\ntest_retry_after_does_not_consume_a_token (test_ratelimit.AllowTests.test_retry_after_does_not_consume_a_token) ... ok\ntest_tokens_never_exceed_the_burst (test_ratelimit.AllowTests.test_tokens_never_exceed_the_burst) ... ok\ntest_unknown_key_has_no_wait (test_ratelimit.AllowTests.test_unknown_key_has_no_wait) ... ok\ntest_invalid_configuration_is_rejected (test_ratelimit.BoundedMemoryTests.test_invalid_configuration_is_rejected) ... ok\ntest_tracked_keys_stay_bounded_and_evict_least_recently_used (test_ratelimit.BoundedMemoryTests.test_tracked_keys_stay_bounded_and_evict_least_recently_used) ... ok\ntest_exactly_burst_threads_win_when_they_race (test_ratelimit.ThreadSafetyTests.test_exactly_burst_threads_win_when_they_race) ... ok\ntest_parallel_clicks_are_never_lost (test_storage.ConcurrencyTests.test_parallel_clicks_are_never_lost) ... ok\ntest_writes_from_a_second_connection_are_visible (test_storage.ConcurrencyTests.test_writes_from_a_second_connection_are_visible) ... ok\ntest_create_generates_a_code_and_reads_back (test_storage.CreateTests.test_create_generates_a_code_and_reads_back) ... ok\ntest_custom_alias_is_honoured_and_conflicts_are_rejected (test_storage.CreateTests.test_custom_alias_is_honoured_and_conflicts_are_rejected) ... ok\ntest_idempotency_key_never_creates_a_second_link (test_storage.CreateTests.test_idempotency_key_never_creates_a_second_link) ... ok\ntest_invalid_urls_and_aliases_are_rejected (test_storage.CreateTests.test_invalid_urls_and_aliases_are_rejected) ... ok\ntest_stats_report_an_exact_click_count (test_storage.CreateTests.test_stats_report_an_exact_click_count) ... ok\ntest_ttl_sets_expiry_and_expired_links_are_still_readable (test_storage.CreateTests.test_ttl_sets_expiry_and_expired_links_are_still_readable) ... ok\ntest_committed_rows_survive_an_abrupt_process_death (test_storage.DurabilityTests.test_committed_rows_survive_an_abrupt_process_death) ... ok\ntest_database_uses_wal_and_full_synchronous (test_storage.DurabilityTests.test_database_uses_wal_and_full_synchronous) ... ok\n\n----------------------------------------------------------------------\nRan 29 tests in 1.634s\n\nOK\n",
+            "recorded_at": 1789039634.8179715,
+            "status": "pass",
+            "task_id": "T-http"
+          }
+        ],
+        "finished_at": 1789039634.818447,
+        "gate_ids": [
+          "G-unit"
+        ],
+        "goal": "Implement linksvc/__main__.py, linksvc/api.py, linksvc/server.py and linksvc/__init__.py: the HTTP API, routing, validation, ready line, logging and graceful shutdown.",
+        "id": "T-http",
+        "notes": "",
+        "owns": [
+          "linksvc/__init__.py",
+          "linksvc/api.py",
+          "linksvc/server.py",
+          "linksvc/__main__.py",
+          "tests/test_api.py"
+        ],
+        "role": "builder",
+        "started_at": 1789039586.8983724,
+        "state": "merged",
+        "submitted_files": [
+          "linksvc/__init__.py",
+          "linksvc/__main__.py",
+          "linksvc/api.py",
+          "linksvc/server.py",
+          "tests/test_api.py"
+        ],
+        "tests": [
+          "an in-process test that starts the server on port 0 and drives the full API"
+        ],
+        "title": "HTTP surface",
+        "worktree": "/home/user/workspace/minifleet/runs/20260910T112549Z-linksvc-c18a27/worktrees/http"
+      }
+    ]
+  },
+  "dispatcher": "packet",
+  "events": [
+    {
+      "dispatcher": "packet",
+      "event": "run.created",
+      "intent": "linksvc",
+      "t": 1789039549.0073173
+    },
+    {
+      "event": "tasks.ready",
+      "t": 1789039549.0333958,
+      "tasks": [
+        "T-storage",
+        "T-ratelimit"
+      ]
+    },
+    {
+      "commit": "2f54b4b2ef8b79d7174504cc5554b35ab3198345",
+      "event": "task.submitted",
+      "files": [
+        "linksvc/storage.py",
+        "tests/test_storage.py"
+      ],
+      "notes": "packet executed in worktree, module + unit tests written",
+      "t": 1789039567.3067842,
+      "task": "T-storage",
+      "worker": "external-runtime"
+    },
+    {
+      "commit": "6b553bb394904cff097b2751e6994bd23b59b25d",
+      "event": "task.submitted",
+      "files": [
+        "linksvc/ratelimit.py",
+        "tests/test_ratelimit.py"
+      ],
+      "notes": "packet executed in worktree, module + unit tests written",
+      "t": 1789039582.8217182,
+      "task": "T-ratelimit",
+      "worker": "external-runtime"
+    },
+    {
+      "branch": "task/ratelimit",
+      "event": "task.merged",
+      "t": 1789039584.6360843,
+      "task": "T-ratelimit"
+    },
+    {
+      "branch": "task/storage",
+      "event": "task.merged",
+      "t": 1789039584.6441293,
+      "task": "T-storage"
+    },
+    {
+      "event": "tasks.ready",
+      "t": 1789039584.6442468,
+      "tasks": [
+        "T-http"
+      ]
+    },
+    {
+      "commit": "4679c8913f457b19a5ba078cdd8047896b8d55e0",
+      "event": "task.submitted",
+      "files": [
+        "linksvc/__init__.py",
+        "linksvc/__main__.py",
+        "linksvc/api.py",
+        "linksvc/server.py",
+        "tests/test_api.py"
+      ],
+      "notes": "packet executed in worktree on top of the merged wave-1 libraries",
+      "t": 1789039633.076412,
+      "task": "T-http",
+      "worker": "external-runtime"
+    },
+    {
+      "branch": "task/http",
+      "event": "task.merged",
+      "t": 1789039636.7489858,
+      "task": "T-http"
+    },
+    {
+      "event": "system.verified",
+      "gates": {
+        "G-acceptance": "pass",
+        "G-budget-p99": "pass",
+        "G-budget-rps": "pass",
+        "G-concurrency": "pass",
+        "G-durability": "pass",
+        "G-layout": "pass",
+        "G-perf": "pass"
+      },
+      "t": 1789039663.4490597,
+      "verdict": "pass: all required gates green"
+    }
+  ],
+  "evidence": [
+    {
+      "artifacts": [
+        "runs/20260910T112549Z-linksvc-c18a27/evidence/G-unit.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 0.6249077320098877,
+      "exit_code": 0,
+      "gate_id": "G-unit",
+      "metrics": {},
+      "output_tail": "\ntest_parallel_clicks_are_never_lost (test_storage.ConcurrencyTests.test_parallel_clicks_are_never_lost) ... ok\ntest_writes_from_a_second_connection_are_visible (test_storage.ConcurrencyTests.test_writes_from_a_second_connection_are_visible) ... ok\ntest_create_generates_a_code_and_reads_back (test_storage.CreateTests.test_create_generates_a_code_and_reads_back) ... ok\ntest_custom_alias_is_honoured_and_conflicts_are_rejected (test_storage.CreateTests.test_custom_alias_is_honoured_and_conflicts_are_rejected) ... ok\ntest_idempotency_key_never_creates_a_second_link (test_storage.CreateTests.test_idempotency_key_never_creates_a_second_link) ... ok\ntest_invalid_urls_and_aliases_are_rejected (test_storage.CreateTests.test_invalid_urls_and_aliases_are_rejected) ... ok\ntest_stats_report_an_exact_click_count (test_storage.CreateTests.test_stats_report_an_exact_click_count) ... ok\ntest_ttl_sets_expiry_and_expired_links_are_still_readable (test_storage.CreateTests.test_ttl_sets_expiry_and_expired_links_are_still_readable) ... ok\ntest_committed_rows_survive_an_abrupt_process_death (test_storage.DurabilityTests.test_committed_rows_survive_an_abrupt_process_death) ... ok\ntest_database_uses_wal_and_full_synchronous (test_storage.DurabilityTests.test_database_uses_wal_and_full_synchronous) ... ok\n\n----------------------------------------------------------------------\nRan 10 tests in 0.537s\n\nOK\n",
+      "recorded_at": 1789039567.9320052,
+      "status": "pass",
+      "task_id": "T-storage"
+    },
+    {
+      "artifacts": [
+        "runs/20260910T112549Z-linksvc-c18a27/evidence/G-unit.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 0.059268951416015625,
+      "exit_code": 0,
+      "gate_id": "G-unit",
+      "metrics": {},
+      "output_tail": "\ntest_burst_is_allowed_then_the_next_call_is_refused_with_a_hint (test_ratelimit.AllowTests.test_burst_is_allowed_then_the_next_call_is_refused_with_a_hint) ... ok\ntest_keys_are_independent (test_ratelimit.AllowTests.test_keys_are_independent) ... ok\ntest_refill_uses_the_clock_rate (test_ratelimit.AllowTests.test_refill_uses_the_clock_rate) ... ok\ntest_retry_after_does_not_consume_a_token (test_ratelimit.AllowTests.test_retry_after_does_not_consume_a_token) ... ok\ntest_tokens_never_exceed_the_burst (test_ratelimit.AllowTests.test_tokens_never_exceed_the_burst) ... ok\ntest_unknown_key_has_no_wait (test_ratelimit.AllowTests.test_unknown_key_has_no_wait) ... ok\ntest_invalid_configuration_is_rejected (test_ratelimit.BoundedMemoryTests.test_invalid_configuration_is_rejected) ... ok\ntest_tracked_keys_stay_bounded_and_evict_least_recently_used (test_ratelimit.BoundedMemoryTests.test_tracked_keys_stay_bounded_and_evict_least_recently_used) ... ok\ntest_exactly_burst_threads_win_when_they_race (test_ratelimit.ThreadSafetyTests.test_exactly_burst_threads_win_when_they_race) ... ok\n\n----------------------------------------------------------------------\nRan 9 tests in 0.009s\n\nOK\n",
+      "recorded_at": 1789039582.8812096,
+      "status": "pass",
+      "task_id": "T-ratelimit"
+    },
+    {
+      "artifacts": [
+        "runs/20260910T112549Z-linksvc-c18a27/evidence/G-unit.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 1.741236686706543,
+      "exit_code": 0,
+      "gate_id": "G-unit",
+      "metrics": {},
+      "output_tail": "vel\": \"info\", \"method\": \"POST\", \"path\": \"/links\", \"remote\": \"127.0.0.1\", \"status\": 201, \"ts\": 1789039634.143143}\n{\"duration_ms\": 1.089, \"level\": \"info\", \"method\": \"POST\", \"path\": \"/links\", \"remote\": \"127.0.0.1\", \"status\": 201, \"ts\": 1789039634.144872}\n{\"duration_ms\": 0.155, \"level\": \"info\", \"method\": \"POST\", \"path\": \"/links\", \"remote\": \"127.0.0.1\", \"status\": 429, \"ts\": 1789039634.14582}\n{\"duration_ms\": 0.171, \"level\": \"info\", \"method\": \"GET\", \"path\": \"/metrics\", \"remote\": \"127.0.0.1\", \"status\": 200, \"ts\": 1789039634.146661}\nok\ntest_redirects_are_not_throttled_by_the_write_bucket (test_api.RateLimitTests.test_redirects_are_not_throttled_by_the_write_bucket) ... {\"duration_ms\": 0.964, \"level\": \"info\", \"method\": \"POST\", \"path\": \"/links\", \"remote\": \"127.0.0.1\", \"status\": 201, \"ts\": 1789039634.204493}\n{\"duration_ms\": 0.839, \"level\": \"info\", \"method\": \"GET\", \"path\": \"/RvrNP6d3\", \"remote\": \"127.0.0.1\", \"status\": 302, \"ts\": 1789039634.206221}\n{\"duration_ms\": 0.746, \"level\": \"info\", \"method\": \"GET\", \"path\": \"/RvrNP6d3\", \"remote\": \"127.0.0.1\", \"status\": 302, \"ts\": 1789039634.207734}\n{\"duration_ms\": 0.582, \"level\": \"info\", \"method\": \"GET\", \"path\": \"/RvrNP6d3\", \"remote\": \"127.0.0.1\", \"status\": 302, \"ts\": 1789039634.20902}\n{\"duration_ms\": 0.657, \"level\": \"info\", \"method\": \"GET\", \"path\": \"/RvrNP6d3\", \"remote\": \"127.0.0.1\", \"status\": 302, \"ts\": 1789039634.210325}\n{\"duration_ms\": 0.718, \"level\": \"info\", \"method\": \"GET\", \"path\": \"/RvrNP6d3\", \"remote\": \"127.0.0.1\", \"status\": 302, \"ts\": 1789039634.211661}\nok\ntest_burst_is_allowed_then_the_next_call_is_refused_with_a_hint (test_ratelimit.AllowTests.test_burst_is_allowed_then_the_next_call_is_refused_with_a_hint) ... ok\ntest_keys_are_independent (test_ratelimit.AllowTests.test_keys_are_independent) ... ok\ntest_refill_uses_the_clock_rate (test_ratelimit.AllowTests.test_refill_uses_the_clock_rate) ... ok\ntest_retry_after_does_not_consume_a_token (test_ratelimit.AllowTests.test_retry_after_does_not_consume_a_token) ... ok\ntest_tokens_never_exceed_the_burst (test_ratelimit.AllowTests.test_tokens_never_exceed_the_burst) ... ok\ntest_unknown_key_has_no_wait (test_ratelimit.AllowTests.test_unknown_key_has_no_wait) ... ok\ntest_invalid_configuration_is_rejected (test_ratelimit.BoundedMemoryTests.test_invalid_configuration_is_rejected) ... ok\ntest_tracked_keys_stay_bounded_and_evict_least_recently_used (test_ratelimit.BoundedMemoryTests.test_tracked_keys_stay_bounded_and_evict_least_recently_used) ... ok\ntest_exactly_burst_threads_win_when_they_race (test_ratelimit.ThreadSafetyTests.test_exactly_burst_threads_win_when_they_race) ... ok\ntest_parallel_clicks_are_never_lost (test_storage.ConcurrencyTests.test_parallel_clicks_are_never_lost) ... ok\ntest_writes_from_a_second_connection_are_visible (test_storage.ConcurrencyTests.test_writes_from_a_second_connection_are_visible) ... ok\ntest_create_generates_a_code_and_reads_back (test_storage.CreateTests.test_create_generates_a_code_and_reads_back) ... ok\ntest_custom_alias_is_honoured_and_conflicts_are_rejected (test_storage.CreateTests.test_custom_alias_is_honoured_and_conflicts_are_rejected) ... ok\ntest_idempotency_key_never_creates_a_second_link (test_storage.CreateTests.test_idempotency_key_never_creates_a_second_link) ... ok\ntest_invalid_urls_and_aliases_are_rejected (test_storage.CreateTests.test_invalid_urls_and_aliases_are_rejected) ... ok\ntest_stats_report_an_exact_click_count (test_storage.CreateTests.test_stats_report_an_exact_click_count) ... ok\ntest_ttl_sets_expiry_and_expired_links_are_still_readable (test_storage.CreateTests.test_ttl_sets_expiry_and_expired_links_are_still_readable) ... ok\ntest_committed_rows_survive_an_abrupt_process_death (test_storage.DurabilityTests.test_committed_rows_survive_an_abrupt_process_death) ... ok\ntest_database_uses_wal_and_full_synchronous (test_storage.DurabilityTests.test_database_uses_wal_and_full_synchronous) ... ok\n\n----------------------------------------------------------------------\nRan 29 tests in 1.634s\n\nOK\n",
+      "recorded_at": 1789039634.8179715,
+      "status": "pass",
+      "task_id": "T-http"
+    },
+    {
+      "artifacts": [
+        "runs/20260910T112549Z-linksvc-c18a27/evidence/G-acceptance.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 1.6364233493804932,
+      "exit_code": 0,
+      "gate_id": "G-acceptance",
+      "metrics": {},
+      "output_tail": "\ntest_create_and_redirect (harness.test_accept.AcceptanceTest.test_create_and_redirect) ... ok\ntest_custom_alias_and_conflict (harness.test_accept.AcceptanceTest.test_custom_alias_and_conflict) ... ok\ntest_health_and_readiness (harness.test_accept.AcceptanceTest.test_health_and_readiness) ... ok\ntest_idempotency_key_reuses_code (harness.test_accept.AcceptanceTest.test_idempotency_key_reuses_code) ... ok\ntest_metrics_endpoint_exposes_counters (harness.test_accept.AcceptanceTest.test_metrics_endpoint_exposes_counters) ... ok\ntest_rate_limit_returns_429_with_retry_after (harness.test_accept.AcceptanceTest.test_rate_limit_returns_429_with_retry_after) ... /usr/lib/python3.12/subprocess.py:1127: ResourceWarning: subprocess 6282 is still running\n  _warn(\"subprocess %s is still running\" % self.pid,\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=6 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=9 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\ntest_rejects_invalid_url_and_bad_alias (harness.test_accept.AcceptanceTest.test_rejects_invalid_url_and_bad_alias) ... ok\ntest_stats_track_clicks (harness.test_accept.AcceptanceTest.test_stats_track_clicks) ... ok\ntest_ttl_expiry_returns_410 (harness.test_accept.AcceptanceTest.test_ttl_expiry_returns_410) ... ok\ntest_unknown_code_is_404 (harness.test_accept.AcceptanceTest.test_unknown_code_is_404) ... ok\n\n----------------------------------------------------------------------\nRan 10 tests in 1.565s\n\nOK\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=3 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=7 encoding='UTF-8'>\n",
+      "recorded_at": 1789039640.9074988,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "runs/20260910T112549Z-linksvc-c18a27/evidence/G-concurrency.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 0.5207295417785645,
+      "exit_code": 0,
+      "gate_id": "G-concurrency",
+      "metrics": {},
+      "output_tail": "\ntest_no_lost_clicks (harness.test_concurrency.ConcurrencyTest.test_no_lost_clicks) ... /usr/lib/python3.12/subprocess.py:1127: ResourceWarning: subprocess 6306 is still running\n  _warn(\"subprocess %s is still running\" % self.pid,\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=7 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\n\n----------------------------------------------------------------------\nRan 1 test in 0.454s\n\nOK\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=3 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='UTF-8'>\n",
+      "recorded_at": 1789039641.4285624,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "runs/20260910T112549Z-linksvc-c18a27/evidence/G-durability.json"
+      ],
+      "detail": "exit=1 (expected [0])",
+      "duration_s": 0.5242578983306885,
+      "exit_code": 1,
+      "gate_id": "G-durability",
+      "metrics": {},
+      "output_tail": "\ntest_sigterm_shuts_down_cleanly (harness.test_durability.DurabilityTest.test_sigterm_shuts_down_cleanly) ... /usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=3 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\ntest_survives_sigkill_and_reopens_same_database (harness.test_durability.DurabilityTest.test_survives_sigkill_and_reopens_same_database) ... FAIL\n\n======================================================================\nFAIL: test_survives_sigkill_and_reopens_same_database (harness.test_durability.DurabilityTest.test_survives_sigkill_and_reopens_same_database)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/runs/20260910T112549Z-linksvc-c18a27/product/harness/test_durability.py\", line 36, in test_survives_sigkill_and_reopens_same_database\n    self.assertEqual(payload[\"clicks\"], 1, \"click counter lost after crash\")\nAssertionError: 2 != 1 : click counter lost after crash\n\n----------------------------------------------------------------------\nRan 2 tests in 0.449s\n\nFAILED (failures=1)\n",
+      "recorded_at": 1789039641.9531002,
+      "status": "fail",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "runs/20260910T112549Z-linksvc-c18a27/evidence/G-perf.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 1.1109023094177246,
+      "exit_code": 0,
+      "gate_id": "G-perf",
+      "metrics": {
+        "redirect_p50_ms": 5.518,
+        "redirect_p95_ms": 12.029,
+        "redirect_p99_ms": 31.077,
+        "redirect_rps": 892.765,
+        "redirect_samples": 600.0
+      },
+      "output_tail": "MINIFLEET_METRIC {\"name\": \"redirect_p50_ms\", \"value\": 5.518}\nMINIFLEET_METRIC {\"name\": \"redirect_p95_ms\", \"value\": 12.029}\nMINIFLEET_METRIC {\"name\": \"redirect_p99_ms\", \"value\": 31.077}\nMINIFLEET_METRIC {\"name\": \"redirect_rps\", \"value\": 892.765}\nMINIFLEET_METRIC {\"name\": \"redirect_samples\", \"value\": 600.0}\nmedian=5.513ms p99=31.077ms rps=892.8\n",
+      "recorded_at": 1789039643.0643222,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "all paths satisfied: ['linksvc/__main__.py', 'linksvc/storage.py', 'linksvc/ratelimit.py', 'linksvc/server.py', 'README.md', 'ACCEPTANCE.md']",
+      "duration_s": 0.0006780624389648438,
+      "exit_code": null,
+      "gate_id": "G-layout",
+      "metrics": {},
+      "output_tail": "",
+      "recorded_at": 1789039643.0651813,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "redirect_p99_ms=31.077 <= 75 -> ok",
+      "duration_s": 1.4066696166992188e-05,
+      "exit_code": null,
+      "gate_id": "G-budget-p99",
+      "metrics": {
+        "redirect_p99_ms": 31.077
+      },
+      "output_tail": "",
+      "recorded_at": 1789039643.0651991,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "redirect_rps=892.765 >= 200 -> ok",
+      "duration_s": 4.5299530029296875e-06,
+      "exit_code": null,
+      "gate_id": "G-budget-rps",
+      "metrics": {
+        "redirect_rps": 892.765
+      },
+      "output_tail": "",
+      "recorded_at": 1789039643.065206,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "runs/20260910T112549Z-linksvc-c18a27/evidence/G-acceptance.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 1.619800329208374,
+      "exit_code": 0,
+      "gate_id": "G-acceptance",
+      "metrics": {},
+      "output_tail": "\ntest_create_and_redirect (harness.test_accept.AcceptanceTest.test_create_and_redirect) ... ok\ntest_custom_alias_and_conflict (harness.test_accept.AcceptanceTest.test_custom_alias_and_conflict) ... ok\ntest_health_and_readiness (harness.test_accept.AcceptanceTest.test_health_and_readiness) ... ok\ntest_idempotency_key_reuses_code (harness.test_accept.AcceptanceTest.test_idempotency_key_reuses_code) ... ok\ntest_metrics_endpoint_exposes_counters (harness.test_accept.AcceptanceTest.test_metrics_endpoint_exposes_counters) ... ok\ntest_rate_limit_returns_429_with_retry_after (harness.test_accept.AcceptanceTest.test_rate_limit_returns_429_with_retry_after) ... /usr/lib/python3.12/subprocess.py:1127: ResourceWarning: subprocess 7609 is still running\n  _warn(\"subprocess %s is still running\" % self.pid,\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=6 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=9 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\ntest_rejects_invalid_url_and_bad_alias (harness.test_accept.AcceptanceTest.test_rejects_invalid_url_and_bad_alias) ... ok\ntest_stats_track_clicks (harness.test_accept.AcceptanceTest.test_stats_track_clicks) ... ok\ntest_ttl_expiry_returns_410 (harness.test_accept.AcceptanceTest.test_ttl_expiry_returns_410) ... ok\ntest_unknown_code_is_404 (harness.test_accept.AcceptanceTest.test_unknown_code_is_404) ... ok\n\n----------------------------------------------------------------------\nRan 10 tests in 1.552s\n\nOK\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=3 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=7 encoding='UTF-8'>\n",
+      "recorded_at": 1789039661.225762,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "runs/20260910T112549Z-linksvc-c18a27/evidence/G-concurrency.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 0.5273318290710449,
+      "exit_code": 0,
+      "gate_id": "G-concurrency",
+      "metrics": {},
+      "output_tail": "\ntest_no_lost_clicks (harness.test_concurrency.ConcurrencyTest.test_no_lost_clicks) ... /usr/lib/python3.12/subprocess.py:1127: ResourceWarning: subprocess 7633 is still running\n  _warn(\"subprocess %s is still running\" % self.pid,\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=7 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\n\n----------------------------------------------------------------------\nRan 1 test in 0.460s\n\nOK\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=3 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='UTF-8'>\n",
+      "recorded_at": 1789039661.7534425,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "runs/20260910T112549Z-linksvc-c18a27/evidence/G-durability.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 0.6017143726348877,
+      "exit_code": 0,
+      "gate_id": "G-durability",
+      "metrics": {},
+      "output_tail": "\ntest_sigterm_shuts_down_cleanly (harness.test_durability.DurabilityTest.test_sigterm_shuts_down_cleanly) ... /usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=3 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\ntest_survives_sigkill_and_reopens_same_database (harness.test_durability.DurabilityTest.test_survives_sigkill_and_reopens_same_database) ... /usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=7 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\n\n----------------------------------------------------------------------\nRan 2 tests in 0.521s\n\nOK\n",
+      "recorded_at": 1789039662.3555272,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "runs/20260910T112549Z-linksvc-c18a27/evidence/G-perf.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 1.0895826816558838,
+      "exit_code": 0,
+      "gate_id": "G-perf",
+      "metrics": {
+        "redirect_p50_ms": 5.202,
+        "redirect_p95_ms": 13.275,
+        "redirect_p99_ms": 30.641,
+        "redirect_rps": 896.485,
+        "redirect_samples": 600.0
+      },
+      "output_tail": "MINIFLEET_METRIC {\"name\": \"redirect_p50_ms\", \"value\": 5.202}\nMINIFLEET_METRIC {\"name\": \"redirect_p95_ms\", \"value\": 13.275}\nMINIFLEET_METRIC {\"name\": \"redirect_p99_ms\", \"value\": 30.641}\nMINIFLEET_METRIC {\"name\": \"redirect_rps\", \"value\": 896.485}\nMINIFLEET_METRIC {\"name\": \"redirect_samples\", \"value\": 600.0}\nmedian=5.194ms p99=30.641ms rps=896.5\n",
+      "recorded_at": 1789039663.4454777,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "all paths satisfied: ['linksvc/__main__.py', 'linksvc/storage.py', 'linksvc/ratelimit.py', 'linksvc/server.py', 'README.md', 'ACCEPTANCE.md']",
+      "duration_s": 0.0008063316345214844,
+      "exit_code": null,
+      "gate_id": "G-layout",
+      "metrics": {},
+      "output_tail": "",
+      "recorded_at": 1789039663.4467435,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "redirect_p99_ms=30.641 <= 75 -> ok",
+      "duration_s": 1.430511474609375e-05,
+      "exit_code": null,
+      "gate_id": "G-budget-p99",
+      "metrics": {
+        "redirect_p99_ms": 30.641
+      },
+      "output_tail": "",
+      "recorded_at": 1789039663.446762,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "redirect_rps=896.485 >= 200 -> ok",
+      "duration_s": 5.245208740234375e-06,
+      "exit_code": null,
+      "gate_id": "G-budget-rps",
+      "metrics": {
+        "redirect_rps": 896.485
+      },
+      "output_tail": "",
+      "recorded_at": 1789039663.4467692,
+      "status": "pass",
+      "task_id": ""
+    }
+  ],
+  "id": "20260910T112549Z-linksvc-c18a27",
+  "integration_branch": "integration",
+  "intent": {
+    "acceptance": [
+      {
+        "gates": [
+          "G-acceptance"
+        ],
+        "id": "A-1",
+        "kind": "functional",
+        "statement": "POST /links creates a link, supports a custom alias and an idempotency key, and rejects invalid input with 400 / 409"
+      },
+      {
+        "gates": [
+          "G-acceptance"
+        ],
+        "id": "A-2",
+        "kind": "functional",
+        "statement": "GET /{code} answers 302 with the original URL, 404 for unknown codes and 410 for expired links"
+      },
+      {
+        "gates": [
+          "G-acceptance"
+        ],
+        "id": "A-3",
+        "kind": "functional",
+        "statement": "A token-bucket limiter returns 429 with Retry-After once the burst is exhausted"
+      },
+      {
+        "gates": [
+          "G-acceptance"
+        ],
+        "id": "A-4",
+        "kind": "functional",
+        "statement": "GET /links/{code}/stats reports an exact click count and /metrics exposes the service counters"
+      },
+      {
+        "gates": [
+          "G-concurrency"
+        ],
+        "id": "A-5",
+        "kind": "safety",
+        "statement": "Parallel redirects never lose a click: 8 threads x 40 redirects must land as exactly 320"
+      },
+      {
+        "gates": [
+          "G-durability"
+        ],
+        "id": "A-6",
+        "kind": "safety",
+        "statement": "A SIGKILL during operation loses no link and no click counter after restart on the same database"
+      },
+      {
+        "gates": [
+          "G-durability"
+        ],
+        "id": "A-7",
+        "kind": "operability",
+        "statement": "SIGTERM produces a clean shutdown with exit status 0"
+      },
+      {
+        "gates": [
+          "G-budget-p99"
+        ],
+        "id": "A-8",
+        "kind": "nfr",
+        "statement": "Redirect latency stays at or below 75 ms at p99"
+      },
+      {
+        "gates": [
+          "G-budget-rps"
+        ],
+        "id": "A-9",
+        "kind": "nfr",
+        "statement": "The redirect path sustains at least 200 requests per second"
+      },
+      {
+        "gates": [
+          "G-layout"
+        ],
+        "id": "A-10",
+        "kind": "operability",
+        "statement": "The service starts as `python3 -m linksvc` and prints a machine-readable ready line with its port"
+      }
+    ],
+    "budgets": {
+      "redirect_p99_ms": 75.0,
+      "redirect_rps": 200.0
+    },
+    "components": [
+      {
+        "acceptance_ids": [
+          "A-1",
+          "A-4",
+          "A-5",
+          "A-6"
+        ],
+        "contract_ids": [
+          "C-INTERFACES"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "LinkStore.create/get/record_click/stats/count_links behave as specified",
+          "an idempotency key never creates a second link",
+          "expired links are reported as expired rather than missing",
+          "100 parallel record_click calls on one code add exactly 100 clicks"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "storage",
+        "name": "Durable link store",
+        "owns": [
+          "linksvc/storage.py",
+          "tests/test_storage.py"
+        ],
+        "responsibility": "Implement linksvc/storage.py: the SQLite-backed store with exact click counting and crash durability.",
+        "tests": [
+          "unit tests for create/alias/ttl/idempotency",
+          "a threaded test proving no clicks are lost"
+        ]
+      },
+      {
+        "acceptance_ids": [
+          "A-3"
+        ],
+        "contract_ids": [
+          "C-INTERFACES"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "allow() returns (True, 0.0) while tokens remain and (False, retry_after) once exhausted",
+          "tokens refill at the configured rate using a monotonic clock",
+          "the number of tracked keys is bounded (evict least recently used)"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "ratelimit",
+        "name": "Token bucket limiter",
+        "owns": [
+          "linksvc/ratelimit.py",
+          "tests/test_ratelimit.py"
+        ],
+        "responsibility": "Implement linksvc/ratelimit.py: a thread-safe token bucket with bounded memory that reports a retry-after hint.",
+        "tests": [
+          "deterministic tests with an injected clock",
+          "a test proving buckets are evicted"
+        ]
+      },
+      {
+        "acceptance_ids": [
+          "A-1",
+          "A-2",
+          "A-4",
+          "A-7",
+          "A-10"
+        ],
+        "contract_ids": [
+          "C-INTERFACES"
+        ],
+        "depends_on": [
+          "storage",
+          "ratelimit"
+        ],
+        "done_when": [
+          "every route in the contract answers with the specified status code and body",
+          "the process prints the MINIFLEET_READY line with the bound port",
+          "SIGTERM drains and exits 0",
+          "each request emits one JSON log line on stderr"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "http",
+        "name": "HTTP surface",
+        "owns": [
+          "linksvc/__init__.py",
+          "linksvc/api.py",
+          "linksvc/server.py",
+          "linksvc/__main__.py",
+          "tests/test_api.py"
+        ],
+        "responsibility": "Implement linksvc/__main__.py, linksvc/api.py, linksvc/server.py and linksvc/__init__.py: the HTTP API, routing, validation, ready line, logging and graceful shutdown.",
+        "tests": [
+          "an in-process test that starts the server on port 0 and drives the full API"
+        ]
+      }
+    ],
+    "constraints": [
+      "Python 3.12 standard library only",
+      "no data loss on SIGKILL (durability is proven by restarting on the same database)",
+      "every counter mutation must be a single atomic statement",
+      "the acceptance harness in harness/ is frozen: workers may read it, never modify it"
+    ],
+    "contracts": [
+      {
+        "content": "## Required HTTP surface\n\n- `POST /links` body `{url, ttl_seconds?, alias?, idempotency_key?}` -> 201 `{code, short_url, url, created_at, expires_at}`; 400 invalid url/alias; 409 alias taken; 429 when rate limited.\n- `GET /{code}` -> 302 `Location: <url>` and records one click; 404 unknown; 410 expired.\n- `GET /links/{code}/stats` -> 200 `{code, url, clicks, created_at, expires_at}`; 404 unknown.\n- `GET /healthz` -> 200 `{\"status\": \"ok\"}`; `GET /readyz` -> 200 `{\"status\": \"ready\"}` once the store is open; `GET /metrics` -> 200 with at least `links_created`, `redirects`, `rate_limited`, `not_found` as numbers.\n\n## Required process behaviour\n\n- `python3 -m linksvc --host H --port P --db PATH --rate R --burst B`; port 0 means an ephemeral port.\n- On listening, print exactly one line to stdout: `MINIFLEET_READY {\"port\": <actual port>}`.\n- `SIGTERM` and `SIGINT` must drain in-flight requests and leave exit status 0.\n- Structured JSON log lines on stderr, one object per request.\n\n## Storage rules\n\n- SQLite with WAL and `synchronous=FULL`; one connection per thread or a serialising lock is acceptable.\n- Click counting must be a single atomic `UPDATE ... SET clicks = clicks + 1`.\n- `idempotency_key` is unique per key: a repeat returns the existing link instead of creating a second one.\n- Expiry is enforced at read time (`expires_at` in the past reads as expired).",
+        "exports": {
+          "linksvc.ratelimit.TokenBucketLimiter": "TokenBucketLimiter(rate: float, burst: int) with allow(key: str) -> tuple[bool, float] returning (allowed, retry_after_seconds)",
+          "linksvc.server.serve": "serve(host: str, port: int, db_path: str, rate: float, burst: int) -> int",
+          "linksvc.storage.Link": "dataclass(code: str, url: str, created_at: float, expires_at: float | None)",
+          "linksvc.storage.LinkStats": "dataclass(code: str, url: str, clicks: int, created_at: float, expires_at: float | None)",
+          "linksvc.storage.LinkStore": "LinkStore(db_path: str) with create(url, code=None, ttl_seconds=None, idempotency_key=None) -> Link, get(code) -> Link | None, record_click(code) -> None, stats(code) -> LinkStats | None, count_links() -> int, close() -> None",
+          "linksvc.storage.errors": "InvalidUrl, InvalidAlias, DuplicateAlias (all subclasses of StorageError)"
+        },
+        "frozen": true,
+        "id": "C-INTERFACES",
+        "path": "contracts/C-INTERFACES.md",
+        "summary": "Frozen module boundaries. Workers implement these exactly; they may not renegotiate them."
+      }
+    ],
+    "deliverables": [
+      "linksvc/storage.py - durable, concurrency-safe link store on SQLite (WAL, synchronous=FULL)",
+      "linksvc/ratelimit.py - thread-safe token-bucket limiter with bounded memory",
+      "linksvc/server.py + linksvc/api.py - HTTP surface on ThreadingHTTPServer with graceful shutdown",
+      "tests/ - unit tests written by each worker for its own module",
+      "README.md and ACCEPTANCE.md - how to run it and what was proven"
+    ],
+    "gate_defs": [
+      {
+        "cmd": "python3 -m unittest discover -s tests -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-unit",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "task",
+        "threshold": 0.0,
+        "timeout": 600,
+        "title": "worker's own unit tests"
+      },
+      {
+        "cmd": "python3 -m unittest harness.test_accept -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-acceptance",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "HTTP contract conformance"
+      },
+      {
+        "cmd": "python3 -m unittest harness.test_concurrency -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-concurrency",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "no lost clicks under concurrency"
+      },
+      {
+        "cmd": "python3 -m unittest harness.test_durability -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-durability",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "crash durability and graceful shutdown"
+      },
+      {
+        "cmd": "python3 -m harness.perf_probe",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-perf",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "measure the redirect path"
+      },
+      {
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-budget-p99",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "budget",
+        "metric": "redirect_p99_ms",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 75.0,
+        "timeout": 300.0,
+        "title": "p99 latency budget"
+      },
+      {
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-budget-rps",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "budget",
+        "metric": "redirect_rps",
+        "op": ">=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 200.0,
+        "timeout": 300.0,
+        "title": "throughput budget"
+      },
+      {
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-layout",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "files",
+        "metric": "",
+        "op": "<=",
+        "paths": [
+          "linksvc/__main__.py",
+          "linksvc/storage.py",
+          "linksvc/ratelimit.py",
+          "linksvc/server.py",
+          "README.md",
+          "ACCEPTANCE.md"
+        ],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 300.0,
+        "title": "deliverable layout"
+      }
+    ],
+    "harness_dir": "harness-linksvc",
+    "id": "linksvc",
+    "out_of_scope": [
+      "authentication and multi-tenancy",
+      "TLS termination (delegated to a reverse proxy)",
+      "analytics beyond click counts",
+      "custom alias reservations across restarts of a different process"
+    ],
+    "stakeholders": [
+      "platform team",
+      "on-call engineer"
+    ],
+    "summary": "A dependency-free link shortener that is safe to run in production: durable under crash, correct under concurrency, rate limited, observable, and fast.",
+    "title": "A production-grade link shortener"
+  },
+  "intent_id": "linksvc",
+  "raw_intent": "Build a link shortener that a real team could put behind traffic: short links with optional custom alias and TTL, accurate click counting under concurrency, no data loss if the process is killed, a token-bucket rate limiter, health/readiness/metrics endpoints, structured logs, graceful shutdown, and a redirect path that stays under 75 ms at p99 while sustaining at least 200 req/s. Standard library only - no third-party packages - so the build is hermetic.",
+  "repo_dir": "runs/20260910T112549Z-linksvc-c18a27/product",
+  "status": "passed",
+  "updated_at": 1789039663.4583192,
+  "verdict": "pass: all required gates green"
+}

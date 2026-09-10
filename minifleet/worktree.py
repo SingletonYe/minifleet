@@ -17,6 +17,24 @@ class GitError(RuntimeError):
     pass
 
 
+# Bytecode and tool caches are produced by *running* the gate commands, not by
+# a worker's edits. They are excluded from the ownership check and from worker
+# commits; a scope violation is about source files, not about a .pyc.
+CACHE_PATHSPECS = [
+    ":(exclude)**/__pycache__/**",
+    ":(exclude)**/*.pyc",
+    ":(exclude)**/.pytest_cache/**",
+    ":(exclude)**/.mypy_cache/**",
+]
+
+
+def is_cache_path(path: str) -> bool:
+    parts = path.replace("\\", "/").split("/")
+    if "__pycache__" in parts or ".pytest_cache" in parts or ".mypy_cache" in parts:
+        return True
+    return path.endswith((".pyc", ".pyo"))
+
+
 def git(args: list[str], cwd: Path | str, check: bool = True) -> subprocess.CompletedProcess:
     proc = subprocess.run(
         ["git", *args],
@@ -104,7 +122,7 @@ class Repo:
         git(["worktree", "remove", "--force", str(path)], self.path, check=False)
 
     def commit_all(self, worktree: Path | str, message: str) -> str | None:
-        git(["add", "-A"], worktree)
+        git(["add", "-A", "--", ".", *CACHE_PATHSPECS], worktree)
         diff = git(["diff", "--cached", "--quiet"], worktree, check=False)
         if diff.returncode == 0:
             return None
@@ -121,7 +139,8 @@ class Repo:
                 continue
             path = line[3:]
             untracked.append(path.split(" -> ")[-1].strip())
-        return sorted(set(tracked) | set(untracked))
+        changed = {p for p in set(tracked) | set(untracked) if not is_cache_path(p)}
+        return sorted(changed)
 
     def diffstat(self, worktree: Path | str, base: str) -> str:
         return git(["diff", "--stat", base], worktree).stdout.strip()

@@ -1,0 +1,13 @@
+[
+  {
+    "commands": [],
+    "files": [],
+    "finished_at": null,
+    "notes": "packet written to runs/20260910T112549Z-linksvc-c18a27/packets/T-http.md; awaiting an external agent runtime",
+    "raw": {},
+    "started_at": 1789039586.900293,
+    "status": "dispatched",
+    "task_id": "T-http",
+    "worker": "external-runtime"
+  }
+]

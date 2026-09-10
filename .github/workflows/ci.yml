@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  engine-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Engine tests (control plane)
+        run: python -m unittest discover -s tests -v
+      - name: Intent compiles and the plan is acyclic
+        run: python -m minifleet plan --intent intents/linksvc.json --runs-dir /tmp/ci-runs
+
+  shipped-product:
+    # The artefact the fleet actually produced, re-checked against the same
+    # frozen harness the fleet used. If this job fails, the evidence in
+    # evidence/linksvc-run/ is no longer reproducible.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Worker unit tests
+        working-directory: examples/linksvc
+        run: python -m unittest discover -s tests -v
+      - name: Frozen acceptance harness
+        working-directory: examples/linksvc
+        run: |
+          python -m unittest harness.test_accept -v
+          python -m unittest harness.test_concurrency -v
+          python -m unittest harness.test_durability -v
+      - name: Non-functional budgets
+        working-directory: examples/linksvc
+        run: python -m harness.perf_probe

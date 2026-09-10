@@ -82,6 +82,38 @@ definition of done: exact click counts under eight concurrent writers, no data l
 The acceptance harness (`intents/harness-linksvc/`) is written by the verification layer,
 not by the workers, and is committed before they start.
 
+## One real run
+
+[`examples/linksvc/`](examples/linksvc/) is not an illustration: it is the tree the fleet
+actually produced and admitted, and [`evidence/linksvc-run/`](evidence/linksvc-run/) is the
+record of that run - the frozen packets handed to each worker, the per-gate evidence, the
+append-only ledger and the generated report.
+
+| what the fleet did | where it is recorded |
+| --- | --- |
+| intent compiled, three tasks planned, two dispatched in parallel | `evidence/linksvc-run/ledger.jsonl` |
+| one self-contained packet per task, each with a disjoint write scope | `evidence/linksvc-run/packets/` |
+| worker output committed only after an ownership check | `evidence/linksvc-run/dispatch.json` |
+| eight gates judged the integrated tree, budgets last | `evidence/linksvc-run/evidence/` |
+| intent -> evidence traceability for all ten criteria | `evidence/linksvc-run/report.md` |
+
+The run is worth reading for the two failures in it, because they are the point:
+
+1. **A gate definition was wrong.** `G-unit` originally ran
+   `unittest discover -s tests -t .`, which cannot import a `tests/` directory that
+   no task owns. The operator found it while dispatching, corrected the frozen intent
+   and re-planned, before any worker output existed to contaminate.
+2. **The acceptance harness was wrong.** The first verification pass failed
+   `G-durability`, and the harness was at fault: it re-clicked a link after the restart
+   and then asserted the pre-crash click count. The assertion was corrected to check
+   `clicks == 1` before the new clicks and `clicks == 2` after them. Both verdicts are
+   still in the ledger - a corrected harness does not erase the failure it caused.
+
+The post-fix numbers, from `evidence/linksvc-run/report.md`: 320/320 clicks counted under
+8 parallel writers, 40/40 links and the click counter intact after `SIGKILL`, `SIGTERM`
+exit status 0, redirect p99 `30.6 ms` against a `75 ms` budget, and `896 req/s` against a
+`200 req/s` budget.
+
 ## Repository layout
 
 ```

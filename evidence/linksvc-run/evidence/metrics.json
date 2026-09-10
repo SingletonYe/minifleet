@@ -1,0 +1,7 @@
+{
+  "redirect_p50_ms": 5.202,
+  "redirect_p95_ms": 13.275,
+  "redirect_p99_ms": 30.641,
+  "redirect_rps": 896.485,
+  "redirect_samples": 600.0
+}

@@ -1,0 +1,158 @@
+{
+  "acceptance": [
+    {
+      "gates": [
+        "G-acceptance"
+      ],
+      "id": "A-1",
+      "kind": "functional",
+      "statement": "POST /links creates a link, supports a custom alias and an idempotency key, and rejects invalid input with 400 / 409"
+    },
+    {
+      "gates": [
+        "G-acceptance"
+      ],
+      "id": "A-2",
+      "kind": "functional",
+      "statement": "GET /{code} answers 302 with the original URL, 404 for unknown codes and 410 for expired links"
+    },
+    {
+      "gates": [
+        "G-acceptance"
+      ],
+      "id": "A-3",
+      "kind": "functional",
+      "statement": "A token-bucket limiter returns 429 with Retry-After once the burst is exhausted"
+    },
+    {
+      "gates": [
+        "G-acceptance"
+      ],
+      "id": "A-4",
+      "kind": "functional",
+      "statement": "GET /links/{code}/stats reports an exact click count and /metrics exposes the service counters"
+    },
+    {
+      "gates": [
+        "G-concurrency"
+      ],
+      "id": "A-5",
+      "kind": "safety",
+      "statement": "Parallel redirects never lose a click: 8 threads x 40 redirects must land as exactly 320"
+    },
+    {
+      "gates": [
+        "G-durability"
+      ],
+      "id": "A-6",
+      "kind": "safety",
+      "statement": "A SIGKILL during operation loses no link and no click counter after restart on the same database"
+    },
+    {
+      "gates": [
+        "G-durability"
+      ],
+      "id": "A-7",
+      "kind": "operability",
+      "statement": "SIGTERM produces a clean shutdown with exit status 0"
+    },
+    {
+      "gates": [
+        "G-budget-p99"
+      ],
+      "id": "A-8",
+      "kind": "nfr",
+      "statement": "Redirect latency stays at or below 75 ms at p99"
+    },
+    {
+      "gates": [
+        "G-budget-rps"
+      ],
+      "id": "A-9",
+      "kind": "nfr",
+      "statement": "The redirect path sustains at least 200 requests per second"
+    },
+    {
+      "gates": [
+        "G-layout"
+      ],
+      "id": "A-10",
+      "kind": "operability",
+      "statement": "The service starts as `python3 -m linksvc` and prints a machine-readable ready line with its port"
+    }
+  ],
+  "base_commit": "a83dd1d8074688ae4189eaaadcd6dda43bad07a3",
+  "budgets": {
+    "redirect_p99_ms": 75.0,
+    "redirect_rps": 200.0
+  },
+  "contracts": [
+    {
+      "exports": {
+        "linksvc.ratelimit.TokenBucketLimiter": "TokenBucketLimiter(rate: float, burst: int) with allow(key: str) -> tuple[bool, float] returning (allowed, retry_after_seconds)",
+        "linksvc.server.serve": "serve(host: str, port: int, db_path: str, rate: float, burst: int) -> int",
+        "linksvc.storage.Link": "dataclass(code: str, url: str, created_at: float, expires_at: float | None)",
+        "linksvc.storage.LinkStats": "dataclass(code: str, url: str, clicks: int, created_at: float, expires_at: float | None)",
+        "linksvc.storage.LinkStore": "LinkStore(db_path: str) with create(url, code=None, ttl_seconds=None, idempotency_key=None) -> Link, get(code) -> Link | None, record_click(code) -> None, stats(code) -> LinkStats | None, count_links() -> int, close() -> None",
+        "linksvc.storage.errors": "InvalidUrl, InvalidAlias, DuplicateAlias (all subclasses of StorageError)"
+      },
+      "frozen": true,
+      "id": "C-INTERFACES",
+      "path": "contracts/C-INTERFACES.md",
+      "summary": "Frozen module boundaries. Workers implement these exactly; they may not renegotiate them."
+    }
+  ],
+  "integration_branch": "integration",
+  "product_dir": "runs/20260910T112549Z-linksvc-c18a27/product",
+  "run_id": "20260910T112549Z-linksvc-c18a27",
+  "task": {
+    "acceptance_ids": [
+      "A-1",
+      "A-2",
+      "A-4",
+      "A-7",
+      "A-10"
+    ],
+    "attempts": 0,
+    "branch": "task/http",
+    "component_id": "http",
+    "contract_ids": [
+      "C-INTERFACES"
+    ],
+    "depends_on": [
+      "T-storage",
+      "T-ratelimit"
+    ],
+    "done_when": [
+      "every route in the contract answers with the specified status code and body",
+      "the process prints the MINIFLEET_READY line with the bound port",
+      "SIGTERM drains and exits 0",
+      "each request emits one JSON log line on stderr"
+    ],
+    "evidence": [],
+    "finished_at": null,
+    "gate_ids": [
+      "G-unit"
+    ],
+    "goal": "Implement linksvc/__main__.py, linksvc/api.py, linksvc/server.py and linksvc/__init__.py: the HTTP API, routing, validation, ready line, logging and graceful shutdown.",
+    "id": "T-http",
+    "notes": "",
+    "owns": [
+      "linksvc/__init__.py",
+      "linksvc/api.py",
+      "linksvc/server.py",
+      "linksvc/__main__.py",
+      "tests/test_api.py"
+    ],
+    "role": "builder",
+    "started_at": null,
+    "state": "ready",
+    "submitted_files": [],
+    "tests": [
+      "an in-process test that starts the server on port 0 and drives the full API"
+    ],
+    "title": "HTTP surface",
+    "worktree": "/home/user/workspace/minifleet/runs/20260910T112549Z-linksvc-c18a27/worktrees/http"
+  },
+  "worktree": "/home/user/workspace/minifleet/runs/20260910T112549Z-linksvc-c18a27/worktrees/http"
+}

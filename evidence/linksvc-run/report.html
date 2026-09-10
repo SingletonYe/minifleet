@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang='en'><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>MiniFleet run report - A production-grade link shortener</title>
+<style>
+:root { --bg:#0b0f14; --panel:#131a23; --line:#22303d; --ink:#e8eef5; --muted:#8ba0b4;
+        --ok:#3ddc97; --bad:#ff6b6b; --warn:#ffc857; --info:#57b8ff; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink);
+       font:15px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+header { padding:40px 28px 24px; border-bottom:1px solid var(--line);
+         background:linear-gradient(180deg,#101823,#0b0f14); }
+h1 { margin:0 0 6px; font-size:26px; letter-spacing:-.01em; }
+h2 { margin:36px 0 12px; font-size:18px; }
+h3 { margin:22px 0 8px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+.muted { color:var(--muted); }
+main { padding:24px 28px 64px; max-width:1180px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-top:18px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+.card .k { color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.08em; }
+.card .v { font-size:22px; font-weight:600; margin-top:4px; }
+table { width:100%; border-collapse:collapse; background:var(--panel);
+        border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+th,td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13.5px; }
+th { background:#0f1620; color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; }
+tr:last-child td { border-bottom:none; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; color:#cfe3ff; }
+.pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11.5px;
+        border:1px solid var(--line); background:#0f1620; }
+.pill.pass,.pill.verified,.pill.merged { color:var(--ok); border-color:#1d5c43; background:#0f2620; }
+.pill.fail,.pill.failed,.pill.error { color:var(--bad); border-color:#5c1d1d; background:#260f0f; }
+.pill.dispatched,.pill.submitted,.pill.incomplete,.pill.unproven { color:var(--warn); border-color:#5c4a1d; background:#26200f; }
+.pill.ready,.pill.pending { color:var(--info); border-color:#1d3c5c; background:#0f1c26; }
+ul { margin:8px 0; padding-left:20px; }
+footer { padding:18px 28px 40px; color:var(--muted); font-size:12.5px; border-top:1px solid var(--line); }
+</style></head>
+<body>
+<header>
+  <h1>MiniFleet run report</h1>
+  <div class='muted'>A production-grade link shortener &middot; intent <code>linksvc</code> &middot; run <code>20260910T112549Z-linksvc-c18a27</code></div>
+  <div class='cards'>
+    <div class='card'><div class='k'>Status</div><div class='v'>passed</div></div>
+    <div class='card'><div class='k'>Criteria verified</div><div class='v'>10/10</div></div>
+    <div class='card'><div class='k'>Gates passed</div><div class='v'>16/17</div></div>
+    <div class='card'><div class='k'>Tasks</div><div class='v'>3</div></div>
+    <div class='card'><div class='k'>Plan repairs</div><div class='v'>0</div></div>
+  </div>
+</header>
+<main>
+  <h2>1. Intent as received</h2>
+  <p>Build a link shortener that a real team could put behind traffic: short links with optional custom alias and TTL, accurate click counting under concurrency, no data loss if the process is killed, a token-bucket rate limiter, health/readiness/metrics endpoints, structured logs, graceful shutdown, and a redirect path that stays under 75 ms at p99 while sustaining at least 200 req/s. Standard library only - no third-party packages - so the build is hermetic.</p>
+  <h3>Deliverables</h3><ul><li>linksvc/storage.py - durable, concurrency-safe link store on SQLite (WAL, synchronous=FULL)</li><li>linksvc/ratelimit.py - thread-safe token-bucket limiter with bounded memory</li><li>linksvc/server.py + linksvc/api.py - HTTP surface on ThreadingHTTPServer with graceful shutdown</li><li>tests/ - unit tests written by each worker for its own module</li><li>README.md and ACCEPTANCE.md - how to run it and what was proven</li></ul>
+  <h3>Constraints</h3><ul><li>Python 3.12 standard library only</li><li>no data loss on SIGKILL (durability is proven by restarting on the same database)</li><li>every counter mutation must be a single atomic statement</li><li>the acceptance harness in harness/ is frozen: workers may read it, never modify it</li></ul>
+  <h3>Out of scope</h3><ul><li>authentication and multi-tenancy</li><li>TLS termination (delegated to a reverse proxy)</li><li>analytics beyond click counts</li><li>custom alias reservations across restarts of a different process</li></ul>
+  <h2>2. Design and task graph</h2>
+  <p class='muted'>The architect froze 1 contract(s) and split the work into 3 single-writer tasks before any worker was dispatched.</p>
+  <svg viewBox='0 0 1080 176' width='100%' height='176' role='img' aria-label='task dependency graph'><path d='M720 54 C 720 76, 540 62, 540 84' stroke='#22303d' fill='none' stroke-width='1.5'/><path d='M360 54 C 360 76, 540 62, 540 84' stroke='#22303d' fill='none' stroke-width='1.5'/><g><rect x='261' y='6' width='198' height='48' rx='10' fill='#131a23' stroke='#3ddc97' stroke-width='1.5'/><text x='360' y='26' text-anchor='middle' fill='#e8eef5' font-family='ui-sans-serif' font-size='12.5'>T-ratelimit</text><text x='360' y='43' text-anchor='middle' fill='#8ba0b4' font-family='ui-sans-serif' font-size='11'>Token bucket limiter</text></g><g><rect x='621' y='6' width='198' height='48' rx='10' fill='#131a23' stroke='#3ddc97' stroke-width='1.5'/><text x='720' y='26' text-anchor='middle' fill='#e8eef5' font-family='ui-sans-serif' font-size='12.5'>T-storage</text><text x='720' y='43' text-anchor='middle' fill='#8ba0b4' font-family='ui-sans-serif' font-size='11'>Durable link store</text></g><g><rect x='441' y='84' width='198' height='48' rx='10' fill='#131a23' stroke='#3ddc97' stroke-width='1.5'/><text x='540' y='104' text-anchor='middle' fill='#e8eef5' font-family='ui-sans-serif' font-size='12.5'>T-http</text><text x='540' y='121' text-anchor='middle' fill='#8ba0b4' font-family='ui-sans-serif' font-size='11'>HTTP surface</text></g></svg>
+  <table><thead><tr><th>Task</th><th>Depends on</th><th>Write scope</th><th>State</th><th>Files</th></tr></thead>
+  <tbody><tr><td><code>T-storage</code><br><span class='muted'>Durable link store</span></td><td>-</td><td><code>linksvc/storage.py, tests/test_storage.py</code></td><td><span class='pill pass'>merged</span></td><td>2</td></tr>
+<tr><td><code>T-ratelimit</code><br><span class='muted'>Token bucket limiter</span></td><td>-</td><td><code>linksvc/ratelimit.py, tests/test_ratelimit.py</code></td><td><span class='pill pass'>merged</span></td><td>2</td></tr>
+<tr><td><code>T-http</code><br><span class='muted'>HTTP surface</span></td><td>T-storage, T-ratelimit</td><td><code>linksvc/__init__.py, linksvc/api.py, linksvc/server.py, linksvc/__main__.py, tests/test_api.py</code></td><td><span class='pill pass'>merged</span></td><td>5</td></tr></tbody></table>
+  <h3>Plan self-repairs</h3><ul><li>No repairs were needed.</li></ul>
+  <h2>3. Traceability: intent to evidence</h2>
+  <p class='muted'>Every acceptance criterion is tied to the gate that decided its fate. Nothing in this report is asserted without a row here.</p>
+  <table><thead><tr><th>Criterion</th><th>Statement</th><th>Owning tasks</th><th>Gate and observation</th></tr></thead>
+  <tbody><tr><td><code>A-1</code><br><span class='pill pass'>verified</span></td><td>POST /links creates a link, supports a custom alias and an idempotency key, and rejects invalid input with 400 / 409</td><td>T-storage, T-http</td><td><code>G-acceptance</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-2</code><br><span class='pill pass'>verified</span></td><td>GET /{code} answers 302 with the original URL, 404 for unknown codes and 410 for expired links</td><td>T-http</td><td><code>G-acceptance</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-3</code><br><span class='pill pass'>verified</span></td><td>A token-bucket limiter returns 429 with Retry-After once the burst is exhausted</td><td>T-ratelimit</td><td><code>G-acceptance</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-4</code><br><span class='pill pass'>verified</span></td><td>GET /links/{code}/stats reports an exact click count and /metrics exposes the service counters</td><td>T-storage, T-http</td><td><code>G-acceptance</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-5</code><br><span class='pill pass'>verified</span></td><td>Parallel redirects never lose a click: 8 threads x 40 redirects must land as exactly 320</td><td>T-storage</td><td><code>G-concurrency</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-6</code><br><span class='pill pass'>verified</span></td><td>A SIGKILL during operation loses no link and no click counter after restart on the same database</td><td>T-storage</td><td><code>G-durability</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-7</code><br><span class='pill pass'>verified</span></td><td>SIGTERM produces a clean shutdown with exit status 0</td><td>T-http</td><td><code>G-durability</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-8</code><br><span class='pill pass'>verified</span></td><td>Redirect latency stays at or below 75 ms at p99</td><td>-</td><td><code>G-budget-p99</code> <span class='pill pass'>pass</span><br><span class='muted'>redirect_p99_ms=30.641 &lt;= 75 -&gt; ok</span></td></tr>
+<tr><td><code>A-9</code><br><span class='pill pass'>verified</span></td><td>The redirect path sustains at least 200 requests per second</td><td>-</td><td><code>G-budget-rps</code> <span class='pill pass'>pass</span><br><span class='muted'>redirect_rps=896.485 &gt;= 200 -&gt; ok</span></td></tr>
+<tr><td><code>A-10</code><br><span class='pill pass'>verified</span></td><td>The service starts as `python3 -m linksvc` and prints a machine-readable ready line with its port</td><td>T-http</td><td><code>G-layout</code> <span class='pill pass'>pass</span><br><span class='muted'>all paths satisfied: [&#x27;linksvc/__main__.py&#x27;, &#x27;linksvc/storage.py&#x27;, &#x27;linksvc/ratelimit.py&#x27;, &#x27;linksvc/server.py&#x27;, &#x27;README.md&#x27;, &#x27;ACCEPTANCE.md&#x27;]</span></td></tr></tbody></table>
+  <h2>4. Gate ledger</h2>
+  <table><thead><tr><th>Gate</th><th>Status</th><th>Duration</th><th>Metrics</th><th>Detail</th></tr></thead>
+  <tbody><tr><td><code>G-unit</code></td><td><span class='pill pass'>pass</span></td><td>0.62s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-unit</code></td><td><span class='pill pass'>pass</span></td><td>0.06s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-unit</code></td><td><span class='pill pass'>pass</span></td><td>1.74s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-acceptance</code></td><td><span class='pill pass'>pass</span></td><td>1.64s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-concurrency</code></td><td><span class='pill pass'>pass</span></td><td>0.52s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-durability</code></td><td><span class='pill fail'>fail</span></td><td>0.52s</td><td><code></code></td><td class='muted'>exit=1 (expected [0])</td></tr>
+<tr><td><code>G-perf</code></td><td><span class='pill pass'>pass</span></td><td>1.11s</td><td><code>{&quot;redirect_p50_ms&quot;: 5.518, &quot;redirect_p95_ms&quot;: 12.029, &quot;redirect_p99_ms&quot;: 31.077, &quot;redirect_rps&quot;: 892.765, &quot;redirect_samples&quot;: 600.0}</code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-layout</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code></code></td><td class='muted'>all paths satisfied: [&#x27;linksvc/__main__.py&#x27;, &#x27;linksvc/storage.py&#x27;, &#x27;linksvc/ratelimit.py&#x27;, &#x27;linksvc/server.py&#x27;, &#x27;README.md&#x27;, &#x27;ACCEPTANCE.md&#x27;]</td></tr>
+<tr><td><code>G-budget-p99</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;redirect_p99_ms&quot;: 31.077}</code></td><td class='muted'>redirect_p99_ms=31.077 &lt;= 75 -&gt; ok</td></tr>
+<tr><td><code>G-budget-rps</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;redirect_rps&quot;: 892.765}</code></td><td class='muted'>redirect_rps=892.765 &gt;= 200 -&gt; ok</td></tr>
+<tr><td><code>G-acceptance</code></td><td><span class='pill pass'>pass</span></td><td>1.62s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-concurrency</code></td><td><span class='pill pass'>pass</span></td><td>0.53s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-durability</code></td><td><span class='pill pass'>pass</span></td><td>0.60s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-perf</code></td><td><span class='pill pass'>pass</span></td><td>1.09s</td><td><code>{&quot;redirect_p50_ms&quot;: 5.202, &quot;redirect_p95_ms&quot;: 13.275, &quot;redirect_p99_ms&quot;: 30.641, &quot;redirect_rps&quot;: 896.485, &quot;redirect_samples&quot;: 600.0}</code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-layout</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code></code></td><td class='muted'>all paths satisfied: [&#x27;linksvc/__main__.py&#x27;, &#x27;linksvc/storage.py&#x27;, &#x27;linksvc/ratelimit.py&#x27;, &#x27;linksvc/server.py&#x27;, &#x27;README.md&#x27;, &#x27;ACCEPTANCE.md&#x27;]</td></tr>
+<tr><td><code>G-budget-p99</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;redirect_p99_ms&quot;: 30.641}</code></td><td class='muted'>redirect_p99_ms=30.641 &lt;= 75 -&gt; ok</td></tr>
+<tr><td><code>G-budget-rps</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;redirect_rps&quot;: 896.485}</code></td><td class='muted'>redirect_rps=896.485 &gt;= 200 -&gt; ok</td></tr></tbody></table>
+  <h2>5. Not proven</h2>
+  <ul><li>Every acceptance criterion carries passing evidence from a gate.</li></ul>
+  <h2>6. Risks and architect decisions</h2>
+  <h3>Risks carried forward</h3><ul><li>non-functional criteria are only as trustworthy as the measurement harness</li></ul>
+  <h3>Decisions</h3><ul><li>acceptance criteria are owned by the verification layer, never by the worker that writes the code</li><li>every task has a single writer and a disjoint write scope; concurrency without ownership is a merge queue</li><li>frozen contracts: C-INTERFACES</li></ul>
+</main>
+<footer>Generated by MiniFleet from the run ledger - no claim in this report exists without gate evidence.</footer>
+</body></html>

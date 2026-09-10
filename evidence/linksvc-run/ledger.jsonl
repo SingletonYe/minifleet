@@ -1,0 +1,18 @@
+{"dispatcher": "packet", "event": "run.created", "intent": "linksvc", "t": 1789039549.0073173}
+{"event": "tasks.ready", "t": 1789039549.0333958, "tasks": ["T-storage", "T-ratelimit"]}
+{"event": "plan.complete", "gates": 8, "t": 1789039549.067204, "tasks": 3}
+{"dispatcher": "packet", "event": "tasks.dispatched", "t": 1789039550.838802, "tasks": ["T-storage", "T-ratelimit"]}
+{"commit": "2f54b4b2ef8b79d7174504cc5554b35ab3198345", "event": "task.submitted", "files": ["linksvc/storage.py", "tests/test_storage.py"], "notes": "packet executed in worktree, module + unit tests written", "t": 1789039567.3067842, "task": "T-storage", "worker": "external-runtime"}
+{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789039567.9341385, "task": "T-storage"}
+{"event": "task.scope_violation", "files": ["linksvc/__pycache__/ratelimit.cpython-312.pyc", "tests/__pycache__/test_ratelimit.cpython-312.pyc"], "t": 1789039569.6925416, "task": "T-ratelimit"}
+{"commit": "6b553bb394904cff097b2751e6994bd23b59b25d", "event": "task.submitted", "files": ["linksvc/ratelimit.py", "tests/test_ratelimit.py"], "notes": "packet executed in worktree, module + unit tests written", "t": 1789039582.8217182, "task": "T-ratelimit", "worker": "external-runtime"}
+{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789039582.8836274, "task": "T-ratelimit"}
+{"branch": "task/ratelimit", "event": "task.merged", "t": 1789039584.6360843, "task": "T-ratelimit"}
+{"branch": "task/storage", "event": "task.merged", "t": 1789039584.6441293, "task": "T-storage"}
+{"event": "tasks.ready", "t": 1789039584.6442468, "tasks": ["T-http"]}
+{"dispatcher": "packet", "event": "tasks.dispatched", "t": 1789039586.8999195, "tasks": ["T-http"]}
+{"commit": "4679c8913f457b19a5ba078cdd8047896b8d55e0", "event": "task.submitted", "files": ["linksvc/__init__.py", "linksvc/__main__.py", "linksvc/api.py", "linksvc/server.py", "tests/test_api.py"], "notes": "packet executed in worktree on top of the merged wave-1 libraries", "t": 1789039633.076412, "task": "T-http", "worker": "external-runtime"}
+{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789039634.8207233, "task": "T-http"}
+{"branch": "task/http", "event": "task.merged", "t": 1789039636.7489858, "task": "T-http"}
+{"event": "system.verified", "gates": {"G-acceptance": "pass", "G-budget-p99": "pass", "G-budget-rps": "pass", "G-concurrency": "pass", "G-durability": "fail", "G-layout": "pass", "G-perf": "pass"}, "t": 1789039643.0676887, "verdict": "fail: G-durability=fail"}
+{"event": "system.verified", "gates": {"G-acceptance": "pass", "G-budget-p99": "pass", "G-budget-rps": "pass", "G-concurrency": "pass", "G-durability": "pass", "G-layout": "pass", "G-perf": "pass"}, "t": 1789039663.4490597, "verdict": "pass: all required gates green"}

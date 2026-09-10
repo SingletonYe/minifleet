@@ -1,3 +1,8 @@
+# Intent as received
+
+Build a link shortener that a real team could put behind traffic: short links with optional custom alias and TTL, accurate click counting under concurrency, no data loss if the process is killed, a token-bucket rate limiter, health/readiness/metrics endpoints, structured logs, graceful shutdown, and a redirect path that stays under 75 ms at p99 while sustaining at least 200 req/s. Standard library only - no third-party packages - so the build is hermetic.
+
+```json
 {
   "id": "linksvc",
   "title": "A production-grade link shortener",
@@ -302,3 +307,4 @@
     }
   ]
 }
+```

@@ -1,0 +1,23 @@
+{
+  "cmd": "python3 -m harness.perf_probe",
+  "evidence": {
+    "artifacts": [],
+    "detail": "exit=0 (expected [0])",
+    "duration_s": 1.0895826816558838,
+    "exit_code": 0,
+    "gate_id": "G-perf",
+    "metrics": {
+      "redirect_p50_ms": 5.202,
+      "redirect_p95_ms": 13.275,
+      "redirect_p99_ms": 30.641,
+      "redirect_rps": 896.485,
+      "redirect_samples": 600.0
+    },
+    "output_tail": "MINIFLEET_METRIC {\"name\": \"redirect_p50_ms\", \"value\": 5.202}\nMINIFLEET_METRIC {\"name\": \"redirect_p95_ms\", \"value\": 13.275}\nMINIFLEET_METRIC {\"name\": \"redirect_p99_ms\", \"value\": 30.641}\nMINIFLEET_METRIC {\"name\": \"redirect_rps\", \"value\": 896.485}\nMINIFLEET_METRIC {\"name\": \"redirect_samples\", \"value\": 600.0}\nmedian=5.194ms p99=30.641ms rps=896.5\n",
+    "recorded_at": 1789039663.4454777,
+    "status": "pass",
+    "task_id": ""
+  },
+  "gate": "G-perf",
+  "title": "measure the redirect path"
+}
