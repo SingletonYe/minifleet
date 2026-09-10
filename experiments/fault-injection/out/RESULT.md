@@ -1,6 +1,6 @@
 # Injected-fault experiment: does the repair loop actually close?
 
-Run `20260910T134427Z-minifleet-v03-quarantine-853030` for intent `minifleet-v03-quarantine`, executed by `minifleet autopilot` against the engine's own repository.
+Run `20260910T134648Z-minifleet-v03-quarantine-7d8c23` for intent `minifleet-v03-quarantine`, executed by `minifleet autopilot` against the engine's own repository.
 
 ## 1. The injected defect
 
@@ -10,14 +10,13 @@ The task gate (`python3 -m unittest discover -s tests -v`) passed anyway - the w
 
 ## 2. What the fleet saw on the first attempt
 
-- `G-quarantine` -> **fail**: exit=1 (expected [0])
+- `G-quarantine` -> **fail**: exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pa
   - AssertionError: 'stable-fail' != 'insufficient-data'
 
 Round 1 verdict: `fail: G-quarantine=fail`
 
 ## 3. What the fleet did about it
 
-- gate `G-quarantine` attributed to task `T-quarantine` (attempt 1, escalate=False)
 - gate `G-quarantine` attributed to task `T-quarantine` (attempt 1, escalate=False)
 
 The repair packet the fleet handed to the next attempt:
@@ -30,13 +29,13 @@ The repair packet the fleet handed to the next attempt:
   "reason": "attempt 1/3 failed 1 gate(s): G-quarantine",
   "failing_gates": [
     {
-      "detail": "exit=1 (expected [0])",
+      "detail": "exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pa",
       "gate_id": "G-quarantine",
       "status": "fail"
     }
   ],
   "instructions": [
-    "Fix gate G-quarantine (status fail): exit=1 (expected [0])",
+    "Fix gate G-quarantine (status fail): exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pa",
     "Re-run gate G-quarantine locally and confirm it passes."
   ]
 }
@@ -44,32 +43,32 @@ The repair packet the fleet handed to the next attempt:
 
 ## 4. The second attempt
 
-The worker read `packets/T-quarantine.repair.json`, fixed the module and resubmitted. Final verdict: **pass: all required gates green** (round verdicts: ['fail: G-quarantine=fail', 'pass: all required gates green']).
+The worker read `packets/T-quarantine.repair.json`, fixed the module and resubmitted. Final verdict: **fail: G-quarantine=fail** (round verdicts: ['fail: G-quarantine=fail']).
 
 ## 5. Deployment, observed by the fleet itself
 
-- ready in 0.065s on port 34773
-- smoke `200`, soak 17 samples / 0 failures, p50 1.757 ms, max 2.101 ms
+- ready in 0.066s on port 46433
+- smoke `200`, soak 17 samples / 0 failures, p50 1.764 ms, max 1.973 ms
 - budget gates: ready <= 10s and p50 <= 50ms both enforced as system gates
 
 ## 6. Fleet accounting
 
 ```json
 {
-  "attempts_total": 2,
-  "critical_path_seconds": 27.37,
+  "attempts_total": 1,
+  "critical_path_seconds": 7.343,
   "failed": 0,
   "gates_failed": 1,
-  "gates_passed": 15,
-  "gates_total": 16,
-  "merged": 1,
-  "retries": 1,
+  "gates_passed": 7,
+  "gates_total": 8,
+  "merged": 0,
+  "retries": 0,
   "slowest_task": {
     "id": "T-quarantine",
-    "seconds": 27.37
+    "seconds": 7.343
   },
   "tasks": 1,
-  "verdict": "pass: all required gates green"
+  "verdict": "fail: G-quarantine=fail"
 }
 ```
 

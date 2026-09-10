@@ -476,12 +476,20 @@ def cmd_autopilot(args: argparse.Namespace) -> int:
         if scheduler.run.status == RunStatus.PASSED.value:
             break
         repair = scheduler.repair_failed(max_attempts=args.max_attempts)
-        print(f"  repair: reopened={repair['reopened']} escalated={repair['escalated']}")
-        if repair["escalated"] and not repair["reopened"]:
+        # verify() may already have reopened the failing task, in which case
+        # repair_failed() has nothing new to add. What decides whether the loop
+        # continues is not the repair report - it is whether any task is
+        # dispatchable right now.
+        ready = scheduler.ready()
+        print(
+            f"  repair: reopened={repair['reopened']} escalated={repair['escalated']} "
+            f"ready={[task.id for task in ready]}"
+        )
+        if repair["escalated"] and not ready:
             print("  escalating: the attempt budget is exhausted")
             break
-        if not repair["reopened"]:
-            print("  nothing attributable left to repair; stopping")
+        if not ready:
+            print("  nothing dispatchable left; stopping")
             break
 
     report_mod.write(run, run_dir)
