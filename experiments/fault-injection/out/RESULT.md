@@ -1,6 +1,6 @@
 # Injected-fault experiment: does the repair loop actually close?
 
-Run `20260910T134730Z-minifleet-v03-quarantine-66cd00` for intent `minifleet-v03-quarantine`, executed by `minifleet autopilot` against the engine's own repository.
+Run `20260910T134913Z-minifleet-v03-quarantine-d94998` for intent `minifleet-v03-quarantine`, executed by `minifleet autopilot` against the engine's own repository.
 
 ## 1. The injected defect
 
@@ -47,8 +47,8 @@ The worker read `packets/T-quarantine.repair.json`, fixed the module and resubmi
 
 ## 5. Deployment, observed by the fleet itself
 
-- ready in 0.06s on port 34019
-- smoke `200`, soak 17 samples / 0 failures, p50 1.764 ms, max 2.233 ms
+- ready in 0.066s on port 44781
+- smoke `200`, soak 17 samples / 0 failures, p50 1.72 ms, max 2.163 ms
 - budget gates: ready <= 10s and p50 <= 50ms both enforced as system gates
 
 ## 6. Fleet accounting
@@ -56,7 +56,7 @@ The worker read `packets/T-quarantine.repair.json`, fixed the module and resubmi
 ```json
 {
   "attempts_total": 2,
-  "critical_path_seconds": 26.639,
+  "critical_path_seconds": 26.745,
   "failed": 0,
   "gates_failed": 1,
   "gates_passed": 15,
@@ -65,7 +65,7 @@ The worker read `packets/T-quarantine.repair.json`, fixed the module and resubmi
   "retries": 1,
   "slowest_task": {
     "id": "T-quarantine",
-    "seconds": 26.639
+    "seconds": 26.745
   },
   "tasks": 1,
   "verdict": "pass: all required gates green"

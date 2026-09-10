@@ -2,11 +2,11 @@
   "attributed": [
     {
       "attempt": 1,
-      "brief": "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134730Z-minifleet-v03-quarantine-66cd00/packets/T-quarantine.repair.json",
+      "brief": "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/packets/T-quarantine.repair.json",
       "escalate": false,
       "event": "system.attributed",
       "gate": "G-quarantine",
-      "t": 1789048070.5273502,
+      "t": 1789048172.708936,
       "task": "T-quarantine"
     }
   ],
@@ -18,37 +18,37 @@
     "ok": true,
     "probe": "/healthz",
     "ready": {
-      "port": 34019,
+      "port": 44781,
       "ready": true,
-      "seconds": 0.06,
-      "stdout_tail": "MINIFLEET_READY {\"port\": 34019}\n{\"burst\": 1000, \"db\": \"/tmp/minifleet-experiment.db\", \"event\": \"listening\", \"host\": \"127.0.0.1\", \"level\": \"info\", \"port\": 34019, \"rate\": 1000.0, \"ts\": 1789048090.380256}"
+      "seconds": 0.066,
+      "stdout_tail": "MINIFLEET_READY {\"port\": 44781}\n{\"burst\": 1000, \"db\": \"/tmp/minifleet-experiment.db\", \"event\": \"listening\", \"host\": \"127.0.0.1\", \"level\": \"info\", \"port\": 44781, \"rate\": 1000.0, \"ts\": 1789048192.758611}"
     },
     "smoke": {
       "ok": true,
-      "seconds": 0.0225,
+      "seconds": 0.0244,
       "status": 200
     },
     "soak": {
       "failures": 0,
-      "max_ms": 2.233,
+      "max_ms": 2.163,
       "ok": true,
-      "p50_ms": 1.764,
+      "p50_ms": 1.72,
       "samples": 17
     },
-    "url": "http://127.0.0.1:34019/healthz"
+    "url": "http://127.0.0.1:44781/healthz"
   },
   "failing_evidence": [
     {
       "artifacts": [
-        "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134730Z-minifleet-v03-quarantine-66cd00/evidence/G-quarantine.json"
+        "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/evidence/G-quarantine.json"
       ],
       "detail": "exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pa",
-      "duration_s": 0.05194425582885742,
+      "duration_s": 0.05278420448303223,
       "exit_code": 1,
       "gate_id": "G-quarantine",
       "metrics": {},
-      "output_tail": "uct/harness/test_quarantine.py\", line 39, in test_empty_outcomes_are_insufficient_data_not_a_failure\n    self.assertEqual(result[\"verdict\"], \"insufficient-data\")\nAssertionError: 'stable-fail' != 'insufficient-data'\n- stable-fail\n+ insufficient-data\n\n\n======================================================================\nFAIL: test_exactly_min_samples_is_enough_to_decide (harness.test_quarantine.ClassifyTest.test_exactly_min_samples_is_enough_to_decide)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134730Z-minifleet-v03-quarantine-66cd00/product/harness/test_quarantine.py\", line 52, in test_exactly_min_samples_is_enough_to_decide\n    self.assertEqual(result[\"verdict\"], \"flaky\")\nAssertionError: 'insufficient-data' != 'flaky'\n- insufficient-data\n+ flaky\n\n\n======================================================================\nFAIL: test_mixed_outcomes_are_flaky (harness.test_quarantine.ClassifyTest.test_mixed_outcomes_are_flaky)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134730Z-minifleet-v03-quarantine-66cd00/product/harness/test_quarantine.py\", line 32, in test_mixed_outcomes_are_flaky\n    self.assertEqual(result[\"verdict\"], \"flaky\")\nAssertionError: 'insufficient-data' != 'flaky'\n- insufficient-data\n+ flaky\n\n\n======================================================================\nFAIL: test_stable_fail (harness.test_quarantine.ClassifyTest.test_stable_fail)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134730Z-minifleet-v03-quarantine-66cd00/product/harness/test_quarantine.py\", line 25, in test_stable_fail\n    self.assertEqual(\nAssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pass_rate': 0.0, 'samples'[19 chars]ail'}\n+ {'dominant': 'fail', 'pass_rate': 0.0, 'samples': 3, 'verdict': 'stable-fail'}\n- {'dominant': None,\n-  'pass_rate': None,\n-  'samples': 3,\n-  'verdict': 'insufficient-data'}\n\n======================================================================\nFAIL: test_stable_pass (harness.test_quarantine.ClassifyTest.test_stable_pass)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134730Z-minifleet-v03-quarantine-66cd00/product/harness/test_quarantine.py\", line 19, in test_stable_pass\n    self.assertEqual(\nAssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-pass', 'pass_rate': 1.0, 'samples'[19 chars]ass'}\n+ {'dominant': 'pass', 'pass_rate': 1.0, 'samples': 3, 'verdict': 'stable-pass'}\n- {'dominant': None,\n-  'pass_rate': None,\n-  'samples': 3,\n-  'verdict': 'insufficient-data'}\n\n======================================================================\nFAIL: test_only_flaky_gates_are_quarantined_and_sorted (harness.test_quarantine.QuarantineTest.test_only_flaky_gates_are_quarantined_and_sorted)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134730Z-minifleet-v03-quarantine-66cd00/product/harness/test_quarantine.py\", line 72, in test_only_flaky_gates_are_quarantined_and_sorted\n    self.assertEqual(quarantine(gates), [\"G-alpha\", \"G-zeta\"])\nAssertionError: Lists differ: [] != ['G-alpha', 'G-zeta']\n\nSecond list contains 2 additional elements.\nFirst extra element 0:\n'G-alpha'\n\n- []\n+ ['G-alpha', 'G-zeta']\n\n----------------------------------------------------------------------\nRan 10 tests in 0.002s\n\nFAILED (failures=6)\n",
-      "recorded_at": 1789048058.2124288,
+      "output_tail": "uct/harness/test_quarantine.py\", line 39, in test_empty_outcomes_are_insufficient_data_not_a_failure\n    self.assertEqual(result[\"verdict\"], \"insufficient-data\")\nAssertionError: 'stable-fail' != 'insufficient-data'\n- stable-fail\n+ insufficient-data\n\n\n======================================================================\nFAIL: test_exactly_min_samples_is_enough_to_decide (harness.test_quarantine.ClassifyTest.test_exactly_min_samples_is_enough_to_decide)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/product/harness/test_quarantine.py\", line 52, in test_exactly_min_samples_is_enough_to_decide\n    self.assertEqual(result[\"verdict\"], \"flaky\")\nAssertionError: 'insufficient-data' != 'flaky'\n- insufficient-data\n+ flaky\n\n\n======================================================================\nFAIL: test_mixed_outcomes_are_flaky (harness.test_quarantine.ClassifyTest.test_mixed_outcomes_are_flaky)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/product/harness/test_quarantine.py\", line 32, in test_mixed_outcomes_are_flaky\n    self.assertEqual(result[\"verdict\"], \"flaky\")\nAssertionError: 'insufficient-data' != 'flaky'\n- insufficient-data\n+ flaky\n\n\n======================================================================\nFAIL: test_stable_fail (harness.test_quarantine.ClassifyTest.test_stable_fail)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/product/harness/test_quarantine.py\", line 25, in test_stable_fail\n    self.assertEqual(\nAssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pass_rate': 0.0, 'samples'[19 chars]ail'}\n+ {'dominant': 'fail', 'pass_rate': 0.0, 'samples': 3, 'verdict': 'stable-fail'}\n- {'dominant': None,\n-  'pass_rate': None,\n-  'samples': 3,\n-  'verdict': 'insufficient-data'}\n\n======================================================================\nFAIL: test_stable_pass (harness.test_quarantine.ClassifyTest.test_stable_pass)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/product/harness/test_quarantine.py\", line 19, in test_stable_pass\n    self.assertEqual(\nAssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-pass', 'pass_rate': 1.0, 'samples'[19 chars]ass'}\n+ {'dominant': 'pass', 'pass_rate': 1.0, 'samples': 3, 'verdict': 'stable-pass'}\n- {'dominant': None,\n-  'pass_rate': None,\n-  'samples': 3,\n-  'verdict': 'insufficient-data'}\n\n======================================================================\nFAIL: test_only_flaky_gates_are_quarantined_and_sorted (harness.test_quarantine.QuarantineTest.test_only_flaky_gates_are_quarantined_and_sorted)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/product/harness/test_quarantine.py\", line 72, in test_only_flaky_gates_are_quarantined_and_sorted\n    self.assertEqual(quarantine(gates), [\"G-alpha\", \"G-zeta\"])\nAssertionError: Lists differ: [] != ['G-alpha', 'G-zeta']\n\nSecond list contains 2 additional elements.\nFirst extra element 0:\n'G-alpha'\n\n- []\n+ ['G-alpha', 'G-zeta']\n\n----------------------------------------------------------------------\nRan 10 tests in 0.002s\n\nFAILED (failures=6)\n",
+      "recorded_at": 1789048160.3820639,
       "status": "fail",
       "task_id": ""
     }
@@ -57,7 +57,7 @@
   "final_verdict": "pass: all required gates green",
   "fleet_metrics": {
     "attempts_total": 2,
-    "critical_path_seconds": 26.639,
+    "critical_path_seconds": 26.745,
     "failed": 0,
     "gates_failed": 1,
     "gates_passed": 15,
@@ -66,7 +66,7 @@
     "retries": 1,
     "slowest_task": {
       "id": "T-quarantine",
-      "seconds": 26.639
+      "seconds": 26.745
     },
     "tasks": 1,
     "verdict": "pass: all required gates green"
@@ -113,7 +113,7 @@
       "reopened": [
         "T-quarantine"
       ],
-      "t": 1789048070.5331883,
+      "t": 1789048172.7155464,
       "unattributed": [],
       "verdict": "fail: G-quarantine=fail"
     },
@@ -129,11 +129,11 @@
         "G-service": "pass"
       },
       "reopened": [],
-      "t": 1789048090.2028606,
+      "t": 1789048192.5867126,
       "unattributed": [],
       "verdict": "pass: all required gates green"
     }
   ],
-  "run_id": "20260910T134730Z-minifleet-v03-quarantine-66cd00",
+  "run_id": "20260910T134913Z-minifleet-v03-quarantine-d94998",
   "unattributed": []
 }

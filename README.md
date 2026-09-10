@@ -93,6 +93,21 @@ definition of done: exact click counts under eight concurrent writers, no data l
 The acceptance harness (`intents/harness-linksvc/`) is written by the verification layer,
 not by the workers, and is committed before they start.
 
+## The repair loop, tested with an injected fault
+
+`experiments/fault-injection/` runs the fleet against the engine's own repository
+and injects a defect that no task gate can see: the worker's own tests pass, and the
+frozen harness fails. The run then has to detect it, attribute it to the component
+that caused it, hand the next attempt an actionable packet, and re-verify.
+
+```bash
+python3 experiments/fault-injection/run_experiment.py
+```
+
+- rendered result: <https://singletonye.github.io/minifleet/fault-injection.html>
+- the run's own traceability report: <https://singletonye.github.io/minifleet/fault-injection-run.html>
+- the raw record a sceptic needs: [`experiments/fault-injection/out/audit/`](experiments/fault-injection/out/audit/)
+
 ## One real run
 
 [`examples/linksvc/`](examples/linksvc/) is not an illustration: it is the tree the fleet

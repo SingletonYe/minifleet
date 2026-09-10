@@ -1,0 +1,996 @@
+{
+  "attributed_verdict": "fail: G-quarantine=fail",
+  "created_at": 1789048153.1754603,
+  "design": {
+    "components": [
+      {
+        "acceptance_ids": [
+          "A-1",
+          "A-2",
+          "A-3",
+          "A-4"
+        ],
+        "contract_ids": [
+          "C-V03"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "classify() returns exactly the four documented keys",
+          "insufficient data - including the empty sample - is never given a verdict",
+          "min_samples is an inclusive boundary",
+          "quarantine() returns sorted flaky gate ids only"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "quarantine",
+        "name": "Flaky-gate quarantine",
+        "owns": [
+          "minifleet/quarantine.py",
+          "tests/test_quarantine.py"
+        ],
+        "responsibility": "Implement minifleet/quarantine.py: classify repeated gate outcomes and list the gates worth quarantining.",
+        "tests": [
+          "unit tests for stable, flaky and insufficient-data cases"
+        ]
+      }
+    ],
+    "contracts": [
+      {
+        "content": "## Exact semantics\n\n`classify(outcomes, min_samples=3, flake_threshold=0.5)`:\n\n- `len(outcomes) < min_samples` -> verdict `insufficient-data`, `pass_rate` **None**, `samples` = len, `dominant` None. An empty list is the `samples: 0` case of this rule.\n- otherwise `pass_rate = round(passes / samples, 3)` and verdict is all of: `stable-pass` when the rate is 1.0, `stable-fail` when it is 0.0, otherwise `flaky`.\n- `dominant` is `pass` when `pass_rate >= flake_threshold` else `fail`; for a stable verdict it matches the verdict; for `insufficient-data` it is None.\n- `min_samples` <= 0 raises ValueError. A non-boolean entry raises TypeError.\n\n`quarantine(gates, min_samples=3, flake_threshold=0.5)` returns the gate ids whose verdict is exactly `flaky`, sorted ascending. Gates with insufficient data are never returned.",
+        "exports": {
+          "minifleet.quarantine.classify": "classify(outcomes: list[bool], min_samples: int = 3, flake_threshold: float = 0.5) -> {'verdict': str, 'pass_rate': float|None, 'samples': int, 'dominant': str|None}",
+          "minifleet.quarantine.quarantine": "quarantine(gates: dict[str, list[bool]], min_samples: int = 3, flake_threshold: float = 0.5) -> list[str]"
+        },
+        "frozen": true,
+        "id": "C-V03",
+        "path": "contracts/C-V03.md",
+        "summary": "Frozen interface for flaky-gate quarantine."
+      }
+    ],
+    "decisions": [
+      "acceptance criteria are owned by the verification layer, never by the worker that writes the code",
+      "every task has a single writer and a disjoint write scope; concurrency without ownership is a merge queue",
+      "frozen contracts: C-V03"
+    ],
+    "gates": [
+      {
+        "attributed_to": [],
+        "cmd": "python3 -m unittest discover -s tests -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-unit",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "task",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "worker's own tests plus the baseline suite"
+      },
+      {
+        "attributed_to": [
+          "quarantine"
+        ],
+        "cmd": "python3 -m unittest harness.test_quarantine -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-quarantine",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "frozen quarantine contract"
+      },
+      {
+        "attributed_to": [],
+        "cmd": "python3 -m unittest discover -s tests",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-regression",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "engine regression on the integrated tree"
+      },
+      {
+        "attributed_to": [],
+        "cmd": "cd examples/linksvc && python3 -m unittest harness.test_accept -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-service",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "shipped service still passes its own harness"
+      },
+      {
+        "attributed_to": [],
+        "cmd": "python3 -m minifleet deploy --dir examples/linksvc --cmd \"python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-v03-deploy.db --rate 1000 --burst 1000\" --probe /healthz --seconds 3 --emit-metrics",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-deploy",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "deploy and observe the shipped service"
+      },
+      {
+        "attributed_to": [],
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-budget-ready",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "budget",
+        "metric": "deploy_ready_seconds",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 10.0,
+        "timeout": 300.0,
+        "title": "the service becomes ready quickly"
+      },
+      {
+        "attributed_to": [],
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-budget-p50",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "budget",
+        "metric": "deploy_p50_ms",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 50.0,
+        "timeout": 300.0,
+        "title": "the deployed service answers quickly"
+      },
+      {
+        "attributed_to": [],
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-layout",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "files",
+        "metric": "",
+        "op": "<=",
+        "paths": [
+          "minifleet/quarantine.py",
+          "ACCEPTANCE.md"
+        ],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 300.0,
+        "title": "the new module is where the contract says"
+      }
+    ],
+    "intent_id": "minifleet-v03-quarantine",
+    "repairs": [],
+    "risks": [],
+    "tasks": [
+      {
+        "acceptance_ids": [
+          "A-1",
+          "A-2",
+          "A-3",
+          "A-4"
+        ],
+        "attempts": 2,
+        "branch": "task/quarantine-a2",
+        "component_id": "quarantine",
+        "contract_ids": [
+          "C-V03"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "classify() returns exactly the four documented keys",
+          "insufficient data - including the empty sample - is never given a verdict",
+          "min_samples is an inclusive boundary",
+          "quarantine() returns sorted flaky gate ids only"
+        ],
+        "evidence": [
+          {
+            "artifacts": [
+              "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/evidence/G-unit.json"
+            ],
+            "detail": "exit=0 (expected [0])",
+            "duration_s": 7.327775239944458,
+            "exit_code": 0,
+            "gate_id": "G-unit",
+            "metrics": {},
+            "output_tail": "tried (test_engine.RepairLoopTests.test_unattributed_system_failure_is_reported_not_retried) ... ok\ntest_brownfield_adoption_falls_back_to_the_filesystem_without_git (test_engine.WorktreeTests.test_brownfield_adoption_falls_back_to_the_filesystem_without_git) ... ok\ntest_brownfield_adoption_pins_a_revision_instead_of_the_working_copy (test_engine.WorktreeTests.test_brownfield_adoption_pins_a_revision_instead_of_the_working_copy)\nA dirty working copy must not become the product baseline. ... ok\ntest_brownfield_baseline_is_adopted_without_clobbering (test_engine.WorktreeTests.test_brownfield_baseline_is_adopted_without_clobbering) ... ok\ntest_ownership_conflict_detection (test_engine.WorktreeTests.test_ownership_conflict_detection) ... ok\ntest_cycle_does_not_hang_the_report (test_fleetmetrics.CriticalPathTests.test_cycle_does_not_hang_the_report) ... ok\ntest_longest_chain_wins_not_the_sum (test_fleetmetrics.CriticalPathTests.test_longest_chain_wins_not_the_sum) ... ok\ntest_missing_dependencies_and_bounds_are_tolerated (test_fleetmetrics.CriticalPathTests.test_missing_dependencies_and_bounds_are_tolerated) ... ok\ntest_a_run_without_a_design_or_evidence_is_tolerated (test_fleetmetrics.SummarizeTests.test_a_run_without_a_design_or_evidence_is_tolerated) ... ok\ntest_an_empty_run_summarises_without_raising (test_fleetmetrics.SummarizeTests.test_an_empty_run_summarises_without_raising) ... ok\ntest_counts_attempts_retries_gates_and_states (test_fleetmetrics.SummarizeTests.test_counts_attempts_retries_gates_and_states) ... ok\ntest_every_documented_key_is_present (test_fleetmetrics.SummarizeTests.test_every_documented_key_is_present) ... ok\ntest_mixed_case (test_quarantine.ClassificationTest.test_mixed_case) ... ok\ntest_quarantine_lists_only_flaky_gates (test_quarantine.ClassificationTest.test_quarantine_lists_only_flaky_gates) ... ok\ntest_stable_cases (test_quarantine.ClassificationTest.test_stable_cases) ... ok\ntest_only_failing_gates_are_kept_and_ordered (test_repair.FailingGateTests.test_only_failing_gates_are_kept_and_ordered) ... ok\ntest_pass_status_only_filter_is_exact (test_repair.FailingGateTests.test_pass_status_only_filter_is_exact) ... ok\ntest_attempt_budget_is_bounded (test_repair.RepairPacketTests.test_attempt_budget_is_bounded) ... ok\ntest_empty_evidence_still_produces_a_usable_packet (test_repair.RepairPacketTests.test_empty_evidence_still_produces_a_usable_packet) ... ok\ntest_inputs_are_not_mutated (test_repair.RepairPacketTests.test_inputs_are_not_mutated) ... ok\ntest_instructions_name_every_failing_gate (test_repair.RepairPacketTests.test_instructions_name_every_failing_gate) ... ok\ntest_markdown_renders_the_escalation (test_repair.RepairPacketTests.test_markdown_renders_the_escalation) ... ok\ntest_scope_and_carry_forward_are_copies (test_repair.RepairPacketTests.test_scope_and_carry_forward_are_copies) ... ok\ntest_shape_ordering_and_scope (test_repair.RepairPacketTests.test_shape_ordering_and_scope) ... ok\ntest_deploy_fails_loudly_when_the_probe_fails (test_wiring.CliTests.test_deploy_fails_loudly_when_the_probe_fails) ... ok\ntest_deploy_fails_when_no_ready_line_arrives (test_wiring.CliTests.test_deploy_fails_when_no_ready_line_arrives) ... ok\ntest_deploy_starts_waits_probes_and_tears_down (test_wiring.CliTests.test_deploy_starts_waits_probes_and_tears_down) ... ok\ntest_fleetmetrics_prints_the_summary (test_wiring.CliTests.test_fleetmetrics_prints_the_summary) ... ok\ntest_help_lists_the_new_capabilities (test_wiring.CliTests.test_help_lists_the_new_capabilities) ... ok\ntest_repair_escalates_once_the_budget_is_spent (test_wiring.CliTests.test_repair_escalates_once_the_budget_is_spent) ... ok\ntest_repair_is_clean_when_nothing_failed (test_wiring.CliTests.test_repair_is_clean_when_nothing_failed) ... ok\ntest_repair_writes_one_packet_per_failed_task (test_wiring.CliTests.test_repair_writes_one_packet_per_failed_task) ... ok\n\n----------------------------------------------------------------------\nRan 60 tests in 7.169s\n\nOK\n",
+            "recorded_at": 1789048180.14565,
+            "status": "pass",
+            "task_id": "T-quarantine"
+          }
+        ],
+        "finished_at": 1789048180.1460564,
+        "gate_ids": [
+          "G-unit"
+        ],
+        "goal": "Implement minifleet/quarantine.py: classify repeated gate outcomes and list the gates worth quarantining.",
+        "id": "T-quarantine",
+        "notes": "system gate G-quarantine failed: exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insuffi",
+        "owns": [
+          "minifleet/quarantine.py",
+          "tests/test_quarantine.py"
+        ],
+        "role": "builder",
+        "started_at": 1789048153.4011931,
+        "state": "merged",
+        "submitted_files": [
+          "minifleet/quarantine.py"
+        ],
+        "tests": [
+          "unit tests for stable, flaky and insufficient-data cases"
+        ],
+        "title": "Flaky-gate quarantine",
+        "worktree": "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/worktrees/quarantine"
+      }
+    ]
+  },
+  "dispatcher": "packet",
+  "events": [
+    {
+      "dispatcher": "packet",
+      "event": "run.created",
+      "intent": "minifleet-v03-quarantine",
+      "t": 1789048153.1754646
+    },
+    {
+      "dirty": false,
+      "event": "baseline.adopted",
+      "files": 123,
+      "mode": "git-revision",
+      "revision": "7d45fc34eabdd97063637ab06d0cab4520936ac3",
+      "source": "/home/user/workspace/minifleet",
+      "t": 1789048153.2034328
+    },
+    {
+      "event": "tasks.ready",
+      "t": 1789048153.25225,
+      "tasks": [
+        "T-quarantine"
+      ]
+    },
+    {
+      "dispatcher": "command",
+      "event": "tasks.dispatched",
+      "t": 1789048153.4027278,
+      "tasks": [
+        "T-quarantine"
+      ]
+    },
+    {
+      "commit": "02ba8ae2d4dea67512628f45bea15d3b962bdec0",
+      "event": "task.submitted",
+      "files": [
+        "minifleet/quarantine.py",
+        "tests/test_quarantine.py"
+      ],
+      "notes": "",
+      "t": 1789048153.4701326,
+      "task": "T-quarantine",
+      "worker": "/usr/bin/python3 /home/user/workspace/minifleet/experiments/fault-injection/workers/worker.py"
+    },
+    {
+      "event": "task.verified",
+      "gates": {
+        "G-unit": "pass"
+      },
+      "t": 1789048160.2941728,
+      "task": "T-quarantine"
+    },
+    {
+      "branch": "task/quarantine",
+      "event": "task.merged",
+      "t": 1789048160.324294,
+      "task": "T-quarantine"
+    },
+    {
+      "attempt": 1,
+      "brief": "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/packets/T-quarantine.repair.json",
+      "escalate": false,
+      "event": "system.attributed",
+      "gate": "G-quarantine",
+      "t": 1789048172.708936,
+      "task": "T-quarantine"
+    },
+    {
+      "event": "tasks.ready",
+      "t": 1789048172.7090502,
+      "tasks": [
+        "T-quarantine"
+      ]
+    },
+    {
+      "event": "system.verified",
+      "gates": {
+        "G-budget-p50": "pass",
+        "G-budget-ready": "pass",
+        "G-deploy": "pass",
+        "G-layout": "pass",
+        "G-quarantine": "fail",
+        "G-regression": "pass",
+        "G-service": "pass"
+      },
+      "reopened": [
+        "T-quarantine"
+      ],
+      "t": 1789048172.7155464,
+      "unattributed": [],
+      "verdict": "fail: G-quarantine=fail"
+    },
+    {
+      "dispatcher": "command",
+      "event": "tasks.dispatched",
+      "t": 1789048172.7565956,
+      "tasks": [
+        "T-quarantine"
+      ]
+    },
+    {
+      "commit": "a1a80c61d23d23863c714989fd7956ca5b5f2566",
+      "event": "task.submitted",
+      "files": [
+        "minifleet/quarantine.py"
+      ],
+      "notes": "",
+      "t": 1789048172.8176112,
+      "task": "T-quarantine",
+      "worker": "/usr/bin/python3 /home/user/workspace/minifleet/experiments/fault-injection/workers/worker.py"
+    },
+    {
+      "event": "task.verified",
+      "gates": {
+        "G-unit": "pass"
+      },
+      "t": 1789048180.1480277,
+      "task": "T-quarantine"
+    },
+    {
+      "branch": "task/quarantine-a2",
+      "event": "task.merged",
+      "t": 1789048180.1772761,
+      "task": "T-quarantine"
+    },
+    {
+      "event": "system.verified",
+      "gates": {
+        "G-budget-p50": "pass",
+        "G-budget-ready": "pass",
+        "G-deploy": "pass",
+        "G-layout": "pass",
+        "G-quarantine": "pass",
+        "G-regression": "pass",
+        "G-service": "pass"
+      },
+      "reopened": [],
+      "t": 1789048192.5867126,
+      "unattributed": [],
+      "verdict": "pass: all required gates green"
+    }
+  ],
+  "evidence": [
+    {
+      "artifacts": [
+        "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/evidence/G-unit.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 6.822055339813232,
+      "exit_code": 0,
+      "gate_id": "G-unit",
+      "metrics": {},
+      "output_tail": "tried (test_engine.RepairLoopTests.test_unattributed_system_failure_is_reported_not_retried) ... ok\ntest_brownfield_adoption_falls_back_to_the_filesystem_without_git (test_engine.WorktreeTests.test_brownfield_adoption_falls_back_to_the_filesystem_without_git) ... ok\ntest_brownfield_adoption_pins_a_revision_instead_of_the_working_copy (test_engine.WorktreeTests.test_brownfield_adoption_pins_a_revision_instead_of_the_working_copy)\nA dirty working copy must not become the product baseline. ... ok\ntest_brownfield_baseline_is_adopted_without_clobbering (test_engine.WorktreeTests.test_brownfield_baseline_is_adopted_without_clobbering) ... ok\ntest_ownership_conflict_detection (test_engine.WorktreeTests.test_ownership_conflict_detection) ... ok\ntest_cycle_does_not_hang_the_report (test_fleetmetrics.CriticalPathTests.test_cycle_does_not_hang_the_report) ... ok\ntest_longest_chain_wins_not_the_sum (test_fleetmetrics.CriticalPathTests.test_longest_chain_wins_not_the_sum) ... ok\ntest_missing_dependencies_and_bounds_are_tolerated (test_fleetmetrics.CriticalPathTests.test_missing_dependencies_and_bounds_are_tolerated) ... ok\ntest_a_run_without_a_design_or_evidence_is_tolerated (test_fleetmetrics.SummarizeTests.test_a_run_without_a_design_or_evidence_is_tolerated) ... ok\ntest_an_empty_run_summarises_without_raising (test_fleetmetrics.SummarizeTests.test_an_empty_run_summarises_without_raising) ... ok\ntest_counts_attempts_retries_gates_and_states (test_fleetmetrics.SummarizeTests.test_counts_attempts_retries_gates_and_states) ... ok\ntest_every_documented_key_is_present (test_fleetmetrics.SummarizeTests.test_every_documented_key_is_present) ... ok\ntest_mixed_case (test_quarantine.ClassificationTest.test_mixed_case) ... ok\ntest_quarantine_lists_only_flaky_gates (test_quarantine.ClassificationTest.test_quarantine_lists_only_flaky_gates) ... ok\ntest_stable_cases (test_quarantine.ClassificationTest.test_stable_cases) ... ok\ntest_only_failing_gates_are_kept_and_ordered (test_repair.FailingGateTests.test_only_failing_gates_are_kept_and_ordered) ... ok\ntest_pass_status_only_filter_is_exact (test_repair.FailingGateTests.test_pass_status_only_filter_is_exact) ... ok\ntest_attempt_budget_is_bounded (test_repair.RepairPacketTests.test_attempt_budget_is_bounded) ... ok\ntest_empty_evidence_still_produces_a_usable_packet (test_repair.RepairPacketTests.test_empty_evidence_still_produces_a_usable_packet) ... ok\ntest_inputs_are_not_mutated (test_repair.RepairPacketTests.test_inputs_are_not_mutated) ... ok\ntest_instructions_name_every_failing_gate (test_repair.RepairPacketTests.test_instructions_name_every_failing_gate) ... ok\ntest_markdown_renders_the_escalation (test_repair.RepairPacketTests.test_markdown_renders_the_escalation) ... ok\ntest_scope_and_carry_forward_are_copies (test_repair.RepairPacketTests.test_scope_and_carry_forward_are_copies) ... ok\ntest_shape_ordering_and_scope (test_repair.RepairPacketTests.test_shape_ordering_and_scope) ... ok\ntest_deploy_fails_loudly_when_the_probe_fails (test_wiring.CliTests.test_deploy_fails_loudly_when_the_probe_fails) ... ok\ntest_deploy_fails_when_no_ready_line_arrives (test_wiring.CliTests.test_deploy_fails_when_no_ready_line_arrives) ... ok\ntest_deploy_starts_waits_probes_and_tears_down (test_wiring.CliTests.test_deploy_starts_waits_probes_and_tears_down) ... ok\ntest_fleetmetrics_prints_the_summary (test_wiring.CliTests.test_fleetmetrics_prints_the_summary) ... ok\ntest_help_lists_the_new_capabilities (test_wiring.CliTests.test_help_lists_the_new_capabilities) ... ok\ntest_repair_escalates_once_the_budget_is_spent (test_wiring.CliTests.test_repair_escalates_once_the_budget_is_spent) ... ok\ntest_repair_is_clean_when_nothing_failed (test_wiring.CliTests.test_repair_is_clean_when_nothing_failed) ... ok\ntest_repair_writes_one_packet_per_failed_task (test_wiring.CliTests.test_repair_writes_one_packet_per_failed_task) ... ok\n\n----------------------------------------------------------------------\nRan 60 tests in 6.681s\n\nOK\n",
+      "recorded_at": 1789048160.2925324,
+      "status": "pass",
+      "task_id": "T-quarantine"
+    },
+    {
+      "artifacts": [
+        "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/evidence/G-quarantine.json"
+      ],
+      "detail": "exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pa",
+      "duration_s": 0.05278420448303223,
+      "exit_code": 1,
+      "gate_id": "G-quarantine",
+      "metrics": {},
+      "output_tail": "uct/harness/test_quarantine.py\", line 39, in test_empty_outcomes_are_insufficient_data_not_a_failure\n    self.assertEqual(result[\"verdict\"], \"insufficient-data\")\nAssertionError: 'stable-fail' != 'insufficient-data'\n- stable-fail\n+ insufficient-data\n\n\n======================================================================\nFAIL: test_exactly_min_samples_is_enough_to_decide (harness.test_quarantine.ClassifyTest.test_exactly_min_samples_is_enough_to_decide)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/product/harness/test_quarantine.py\", line 52, in test_exactly_min_samples_is_enough_to_decide\n    self.assertEqual(result[\"verdict\"], \"flaky\")\nAssertionError: 'insufficient-data' != 'flaky'\n- insufficient-data\n+ flaky\n\n\n======================================================================\nFAIL: test_mixed_outcomes_are_flaky (harness.test_quarantine.ClassifyTest.test_mixed_outcomes_are_flaky)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/product/harness/test_quarantine.py\", line 32, in test_mixed_outcomes_are_flaky\n    self.assertEqual(result[\"verdict\"], \"flaky\")\nAssertionError: 'insufficient-data' != 'flaky'\n- insufficient-data\n+ flaky\n\n\n======================================================================\nFAIL: test_stable_fail (harness.test_quarantine.ClassifyTest.test_stable_fail)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/product/harness/test_quarantine.py\", line 25, in test_stable_fail\n    self.assertEqual(\nAssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pass_rate': 0.0, 'samples'[19 chars]ail'}\n+ {'dominant': 'fail', 'pass_rate': 0.0, 'samples': 3, 'verdict': 'stable-fail'}\n- {'dominant': None,\n-  'pass_rate': None,\n-  'samples': 3,\n-  'verdict': 'insufficient-data'}\n\n======================================================================\nFAIL: test_stable_pass (harness.test_quarantine.ClassifyTest.test_stable_pass)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/product/harness/test_quarantine.py\", line 19, in test_stable_pass\n    self.assertEqual(\nAssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-pass', 'pass_rate': 1.0, 'samples'[19 chars]ass'}\n+ {'dominant': 'pass', 'pass_rate': 1.0, 'samples': 3, 'verdict': 'stable-pass'}\n- {'dominant': None,\n-  'pass_rate': None,\n-  'samples': 3,\n-  'verdict': 'insufficient-data'}\n\n======================================================================\nFAIL: test_only_flaky_gates_are_quarantined_and_sorted (harness.test_quarantine.QuarantineTest.test_only_flaky_gates_are_quarantined_and_sorted)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/product/harness/test_quarantine.py\", line 72, in test_only_flaky_gates_are_quarantined_and_sorted\n    self.assertEqual(quarantine(gates), [\"G-alpha\", \"G-zeta\"])\nAssertionError: Lists differ: [] != ['G-alpha', 'G-zeta']\n\nSecond list contains 2 additional elements.\nFirst extra element 0:\n'G-alpha'\n\n- []\n+ ['G-alpha', 'G-zeta']\n\n----------------------------------------------------------------------\nRan 10 tests in 0.002s\n\nFAILED (failures=6)\n",
+      "recorded_at": 1789048160.3820639,
+      "status": "fail",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/evidence/G-regression.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 7.348923921585083,
+      "exit_code": 0,
+      "gate_id": "G-regression",
+      "metrics": {},
+      "output_tail": "\n............................................................\n----------------------------------------------------------------------\nRan 60 tests in 7.200s\n\nOK\n",
+      "recorded_at": 1789048167.7312539,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/evidence/G-service.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 1.610750436782837,
+      "exit_code": 0,
+      "gate_id": "G-service",
+      "metrics": {},
+      "output_tail": "\ntest_create_and_redirect (harness.test_accept.AcceptanceTest.test_create_and_redirect) ... ok\ntest_custom_alias_and_conflict (harness.test_accept.AcceptanceTest.test_custom_alias_and_conflict) ... ok\ntest_health_and_readiness (harness.test_accept.AcceptanceTest.test_health_and_readiness) ... ok\ntest_idempotency_key_reuses_code (harness.test_accept.AcceptanceTest.test_idempotency_key_reuses_code) ... ok\ntest_metrics_endpoint_exposes_counters (harness.test_accept.AcceptanceTest.test_metrics_endpoint_exposes_counters) ... ok\ntest_rate_limit_returns_429_with_retry_after (harness.test_accept.AcceptanceTest.test_rate_limit_returns_429_with_retry_after) ... /usr/lib/python3.12/subprocess.py:1127: ResourceWarning: subprocess 4465 is still running\n  _warn(\"subprocess %s is still running\" % self.pid,\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=6 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=9 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\ntest_rejects_invalid_url_and_bad_alias (harness.test_accept.AcceptanceTest.test_rejects_invalid_url_and_bad_alias) ... ok\ntest_stats_track_clicks (harness.test_accept.AcceptanceTest.test_stats_track_clicks) ... ok\ntest_ttl_expiry_returns_410 (harness.test_accept.AcceptanceTest.test_ttl_expiry_returns_410) ... ok\ntest_unknown_code_is_404 (harness.test_accept.AcceptanceTest.test_unknown_code_is_404) ... ok\n\n----------------------------------------------------------------------\nRan 10 tests in 1.536s\n\nOK\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=3 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=7 encoding='UTF-8'>\n",
+      "recorded_at": 1789048169.3422956,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/evidence/G-deploy.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 3.358351230621338,
+      "exit_code": 0,
+      "gate_id": "G-deploy",
+      "metrics": {
+        "deploy_failures": 0.0,
+        "deploy_max_ms": 2.022,
+        "deploy_ok": 1.0,
+        "deploy_p50_ms": 1.704,
+        "deploy_ready_seconds": 0.068,
+        "deploy_samples": 13.0,
+        "deploy_smoke_ms": 23.9,
+        "deploy_smoke_status": 200.0
+      },
+      "output_tail": "{\n  \"cmd\": \"python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-v03-deploy.db --rate 1000 --burst 1000\",\n  \"dir\": \"examples/linksvc\",\n  \"exit_code\": 0,\n  \"ok\": true,\n  \"probe\": \"/healthz\",\n  \"ready\": {\n    \"port\": 43833,\n    \"ready\": true,\n    \"seconds\": 0.068,\n    \"stdout_tail\": \"MINIFLEET_READY {\\\"port\\\": 43833}\\n{\\\"burst\\\": 1000, \\\"db\\\": \\\"/tmp/minifleet-v03-deploy.db\\\", \\\"event\\\": \\\"listening\\\", \\\"host\\\": \\\"127.0.0.1\\\", \\\"level\\\": \\\"info\\\", \\\"port\\\": 43833, \\\"rate\\\": 1000.0, \\\"ts\\\": 1789048169.487878}\"\n  },\n  \"smoke\": {\n    \"ok\": true,\n    \"seconds\": 0.0239,\n    \"status\": 200\n  },\n  \"soak\": {\n    \"failures\": 0,\n    \"max_ms\": 2.022,\n    \"ok\": true,\n    \"p50_ms\": 1.704,\n    \"samples\": 13\n  },\n  \"url\": \"http://127.0.0.1:43833/healthz\"\n}\nMINIFLEET_METRIC {\"name\": \"deploy_ok\", \"value\": 1.0}\nMINIFLEET_METRIC {\"name\": \"deploy_ready_seconds\", \"value\": 0.068}\nMINIFLEET_METRIC {\"name\": \"deploy_smoke_ms\", \"value\": 23.9}\nMINIFLEET_METRIC {\"name\": \"deploy_smoke_status\", \"value\": 200.0}\nMINIFLEET_METRIC {\"name\": \"deploy_p50_ms\", \"value\": 1.704}\nMINIFLEET_METRIC {\"name\": \"deploy_max_ms\", \"value\": 2.022}\nMINIFLEET_METRIC {\"name\": \"deploy_samples\", \"value\": 13.0}\nMINIFLEET_METRIC {\"name\": \"deploy_failures\", \"value\": 0.0}\n",
+      "recorded_at": 1789048172.7016275,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "all paths satisfied: ['minifleet/quarantine.py', 'ACCEPTANCE.md']",
+      "duration_s": 0.0004627704620361328,
+      "exit_code": null,
+      "gate_id": "G-layout",
+      "metrics": {},
+      "output_tail": "",
+      "recorded_at": 1789048172.7023592,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "deploy_ready_seconds=0.068 <= 10 -> ok",
+      "duration_s": 1.4781951904296875e-05,
+      "exit_code": null,
+      "gate_id": "G-budget-ready",
+      "metrics": {
+        "deploy_ready_seconds": 0.068
+      },
+      "output_tail": "",
+      "recorded_at": 1789048172.7023778,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "deploy_p50_ms=1.704 <= 50 -> ok",
+      "duration_s": 4.5299530029296875e-06,
+      "exit_code": null,
+      "gate_id": "G-budget-p50",
+      "metrics": {
+        "deploy_p50_ms": 1.704
+      },
+      "output_tail": "",
+      "recorded_at": 1789048172.7023842,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/evidence/G-unit.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 7.327775239944458,
+      "exit_code": 0,
+      "gate_id": "G-unit",
+      "metrics": {},
+      "output_tail": "tried (test_engine.RepairLoopTests.test_unattributed_system_failure_is_reported_not_retried) ... ok\ntest_brownfield_adoption_falls_back_to_the_filesystem_without_git (test_engine.WorktreeTests.test_brownfield_adoption_falls_back_to_the_filesystem_without_git) ... ok\ntest_brownfield_adoption_pins_a_revision_instead_of_the_working_copy (test_engine.WorktreeTests.test_brownfield_adoption_pins_a_revision_instead_of_the_working_copy)\nA dirty working copy must not become the product baseline. ... ok\ntest_brownfield_baseline_is_adopted_without_clobbering (test_engine.WorktreeTests.test_brownfield_baseline_is_adopted_without_clobbering) ... ok\ntest_ownership_conflict_detection (test_engine.WorktreeTests.test_ownership_conflict_detection) ... ok\ntest_cycle_does_not_hang_the_report (test_fleetmetrics.CriticalPathTests.test_cycle_does_not_hang_the_report) ... ok\ntest_longest_chain_wins_not_the_sum (test_fleetmetrics.CriticalPathTests.test_longest_chain_wins_not_the_sum) ... ok\ntest_missing_dependencies_and_bounds_are_tolerated (test_fleetmetrics.CriticalPathTests.test_missing_dependencies_and_bounds_are_tolerated) ... ok\ntest_a_run_without_a_design_or_evidence_is_tolerated (test_fleetmetrics.SummarizeTests.test_a_run_without_a_design_or_evidence_is_tolerated) ... ok\ntest_an_empty_run_summarises_without_raising (test_fleetmetrics.SummarizeTests.test_an_empty_run_summarises_without_raising) ... ok\ntest_counts_attempts_retries_gates_and_states (test_fleetmetrics.SummarizeTests.test_counts_attempts_retries_gates_and_states) ... ok\ntest_every_documented_key_is_present (test_fleetmetrics.SummarizeTests.test_every_documented_key_is_present) ... ok\ntest_mixed_case (test_quarantine.ClassificationTest.test_mixed_case) ... ok\ntest_quarantine_lists_only_flaky_gates (test_quarantine.ClassificationTest.test_quarantine_lists_only_flaky_gates) ... ok\ntest_stable_cases (test_quarantine.ClassificationTest.test_stable_cases) ... ok\ntest_only_failing_gates_are_kept_and_ordered (test_repair.FailingGateTests.test_only_failing_gates_are_kept_and_ordered) ... ok\ntest_pass_status_only_filter_is_exact (test_repair.FailingGateTests.test_pass_status_only_filter_is_exact) ... ok\ntest_attempt_budget_is_bounded (test_repair.RepairPacketTests.test_attempt_budget_is_bounded) ... ok\ntest_empty_evidence_still_produces_a_usable_packet (test_repair.RepairPacketTests.test_empty_evidence_still_produces_a_usable_packet) ... ok\ntest_inputs_are_not_mutated (test_repair.RepairPacketTests.test_inputs_are_not_mutated) ... ok\ntest_instructions_name_every_failing_gate (test_repair.RepairPacketTests.test_instructions_name_every_failing_gate) ... ok\ntest_markdown_renders_the_escalation (test_repair.RepairPacketTests.test_markdown_renders_the_escalation) ... ok\ntest_scope_and_carry_forward_are_copies (test_repair.RepairPacketTests.test_scope_and_carry_forward_are_copies) ... ok\ntest_shape_ordering_and_scope (test_repair.RepairPacketTests.test_shape_ordering_and_scope) ... ok\ntest_deploy_fails_loudly_when_the_probe_fails (test_wiring.CliTests.test_deploy_fails_loudly_when_the_probe_fails) ... ok\ntest_deploy_fails_when_no_ready_line_arrives (test_wiring.CliTests.test_deploy_fails_when_no_ready_line_arrives) ... ok\ntest_deploy_starts_waits_probes_and_tears_down (test_wiring.CliTests.test_deploy_starts_waits_probes_and_tears_down) ... ok\ntest_fleetmetrics_prints_the_summary (test_wiring.CliTests.test_fleetmetrics_prints_the_summary) ... ok\ntest_help_lists_the_new_capabilities (test_wiring.CliTests.test_help_lists_the_new_capabilities) ... ok\ntest_repair_escalates_once_the_budget_is_spent (test_wiring.CliTests.test_repair_escalates_once_the_budget_is_spent) ... ok\ntest_repair_is_clean_when_nothing_failed (test_wiring.CliTests.test_repair_is_clean_when_nothing_failed) ... ok\ntest_repair_writes_one_packet_per_failed_task (test_wiring.CliTests.test_repair_writes_one_packet_per_failed_task) ... ok\n\n----------------------------------------------------------------------\nRan 60 tests in 7.169s\n\nOK\n",
+      "recorded_at": 1789048180.14565,
+      "status": "pass",
+      "task_id": "T-quarantine"
+    },
+    {
+      "artifacts": [
+        "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/evidence/G-quarantine.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 0.04829668998718262,
+      "exit_code": 0,
+      "gate_id": "G-quarantine",
+      "metrics": {},
+      "output_tail": "\ntest_a_sample_smaller_than_the_minimum_is_insufficient_data (harness.test_quarantine.ClassifyTest.test_a_sample_smaller_than_the_minimum_is_insufficient_data) ... ok\ntest_dominance_follows_the_flake_threshold (harness.test_quarantine.ClassifyTest.test_dominance_follows_the_flake_threshold) ... ok\ntest_empty_outcomes_are_insufficient_data_not_a_failure (harness.test_quarantine.ClassifyTest.test_empty_outcomes_are_insufficient_data_not_a_failure) ... ok\ntest_exactly_min_samples_is_enough_to_decide (harness.test_quarantine.ClassifyTest.test_exactly_min_samples_is_enough_to_decide) ... ok\ntest_mixed_outcomes_are_flaky (harness.test_quarantine.ClassifyTest.test_mixed_outcomes_are_flaky) ... ok\ntest_stable_fail (harness.test_quarantine.ClassifyTest.test_stable_fail) ... ok\ntest_stable_pass (harness.test_quarantine.ClassifyTest.test_stable_pass) ... ok\ntest_insufficient_data_is_never_quarantined (harness.test_quarantine.QuarantineTest.test_insufficient_data_is_never_quarantined) ... ok\ntest_only_flaky_gates_are_quarantined_and_sorted (harness.test_quarantine.QuarantineTest.test_only_flaky_gates_are_quarantined_and_sorted) ... ok\ntest_quarantine_accepts_the_same_thresholds (harness.test_quarantine.QuarantineTest.test_quarantine_accepts_the_same_thresholds) ... ok\n\n----------------------------------------------------------------------\nRan 10 tests in 0.001s\n\nOK\n",
+      "recorded_at": 1789048180.2316208,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/evidence/G-regression.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 7.358583927154541,
+      "exit_code": 0,
+      "gate_id": "G-regression",
+      "metrics": {},
+      "output_tail": "\n............................................................\n----------------------------------------------------------------------\nRan 60 tests in 7.251s\n\nOK\n",
+      "recorded_at": 1789048187.5905025,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/evidence/G-service.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 1.6222643852233887,
+      "exit_code": 0,
+      "gate_id": "G-service",
+      "metrics": {},
+      "output_tail": "\ntest_create_and_redirect (harness.test_accept.AcceptanceTest.test_create_and_redirect) ... ok\ntest_custom_alias_and_conflict (harness.test_accept.AcceptanceTest.test_custom_alias_and_conflict) ... ok\ntest_health_and_readiness (harness.test_accept.AcceptanceTest.test_health_and_readiness) ... ok\ntest_idempotency_key_reuses_code (harness.test_accept.AcceptanceTest.test_idempotency_key_reuses_code) ... ok\ntest_metrics_endpoint_exposes_counters (harness.test_accept.AcceptanceTest.test_metrics_endpoint_exposes_counters) ... ok\ntest_rate_limit_returns_429_with_retry_after (harness.test_accept.AcceptanceTest.test_rate_limit_returns_429_with_retry_after) ... /usr/lib/python3.12/subprocess.py:1127: ResourceWarning: subprocess 5166 is still running\n  _warn(\"subprocess %s is still running\" % self.pid,\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=6 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=9 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\ntest_rejects_invalid_url_and_bad_alias (harness.test_accept.AcceptanceTest.test_rejects_invalid_url_and_bad_alias) ... ok\ntest_stats_track_clicks (harness.test_accept.AcceptanceTest.test_stats_track_clicks) ... ok\ntest_ttl_expiry_returns_410 (harness.test_accept.AcceptanceTest.test_ttl_expiry_returns_410) ... ok\ntest_unknown_code_is_404 (harness.test_accept.AcceptanceTest.test_unknown_code_is_404) ... ok\n\n----------------------------------------------------------------------\nRan 10 tests in 1.544s\n\nOK\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=3 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=7 encoding='UTF-8'>\n",
+      "recorded_at": 1789048189.213166,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/evidence/G-deploy.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 3.3703854084014893,
+      "exit_code": 0,
+      "gate_id": "G-deploy",
+      "metrics": {
+        "deploy_failures": 0.0,
+        "deploy_max_ms": 1.91,
+        "deploy_ok": 1.0,
+        "deploy_p50_ms": 1.731,
+        "deploy_ready_seconds": 0.068,
+        "deploy_samples": 13.0,
+        "deploy_smoke_ms": 23.8,
+        "deploy_smoke_status": 200.0
+      },
+      "output_tail": "{\n  \"cmd\": \"python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-v03-deploy.db --rate 1000 --burst 1000\",\n  \"dir\": \"examples/linksvc\",\n  \"exit_code\": 0,\n  \"ok\": true,\n  \"probe\": \"/healthz\",\n  \"ready\": {\n    \"port\": 46331,\n    \"ready\": true,\n    \"seconds\": 0.068,\n    \"stdout_tail\": \"MINIFLEET_READY {\\\"port\\\": 46331}\\n{\\\"burst\\\": 1000, \\\"db\\\": \\\"/tmp/minifleet-v03-deploy.db\\\", \\\"event\\\": \\\"listening\\\", \\\"host\\\": \\\"127.0.0.1\\\", \\\"level\\\": \\\"info\\\", \\\"port\\\": 46331, \\\"rate\\\": 1000.0, \\\"ts\\\": 1789048189.372857}\"\n  },\n  \"smoke\": {\n    \"ok\": true,\n    \"seconds\": 0.0238,\n    \"status\": 200\n  },\n  \"soak\": {\n    \"failures\": 0,\n    \"max_ms\": 1.91,\n    \"ok\": true,\n    \"p50_ms\": 1.731,\n    \"samples\": 13\n  },\n  \"url\": \"http://127.0.0.1:46331/healthz\"\n}\nMINIFLEET_METRIC {\"name\": \"deploy_ok\", \"value\": 1.0}\nMINIFLEET_METRIC {\"name\": \"deploy_ready_seconds\", \"value\": 0.068}\nMINIFLEET_METRIC {\"name\": \"deploy_smoke_ms\", \"value\": 23.8}\nMINIFLEET_METRIC {\"name\": \"deploy_smoke_status\", \"value\": 200.0}\nMINIFLEET_METRIC {\"name\": \"deploy_p50_ms\", \"value\": 1.731}\nMINIFLEET_METRIC {\"name\": \"deploy_max_ms\", \"value\": 1.91}\nMINIFLEET_METRIC {\"name\": \"deploy_samples\", \"value\": 13.0}\nMINIFLEET_METRIC {\"name\": \"deploy_failures\", \"value\": 0.0}\n",
+      "recorded_at": 1789048192.5840054,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "all paths satisfied: ['minifleet/quarantine.py', 'ACCEPTANCE.md']",
+      "duration_s": 0.00018215179443359375,
+      "exit_code": null,
+      "gate_id": "G-layout",
+      "metrics": {},
+      "output_tail": "",
+      "recorded_at": 1789048192.584484,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "deploy_ready_seconds=0.068 <= 10 -> ok",
+      "duration_s": 1.0967254638671875e-05,
+      "exit_code": null,
+      "gate_id": "G-budget-ready",
+      "metrics": {
+        "deploy_ready_seconds": 0.068
+      },
+      "output_tail": "",
+      "recorded_at": 1789048192.5845082,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "deploy_p50_ms=1.731 <= 50 -> ok",
+      "duration_s": 2.86102294921875e-06,
+      "exit_code": null,
+      "gate_id": "G-budget-p50",
+      "metrics": {
+        "deploy_p50_ms": 1.731
+      },
+      "output_tail": "",
+      "recorded_at": 1789048192.584513,
+      "status": "pass",
+      "task_id": ""
+    }
+  ],
+  "id": "20260910T134913Z-minifleet-v03-quarantine-d94998",
+  "integration_branch": "integration",
+  "intent": {
+    "acceptance": [
+      {
+        "gates": [
+          "G-quarantine"
+        ],
+        "id": "A-1",
+        "kind": "functional",
+        "statement": "classify() labels all-pass as stable-pass, all-fail as stable-fail and mixed outcomes as flaky, with an exact pass_rate and sample count"
+      },
+      {
+        "gates": [
+          "G-quarantine"
+        ],
+        "id": "A-2",
+        "kind": "safety",
+        "statement": "A sample smaller than min_samples - including an empty one - is insufficient-data with a null pass_rate, never a verdict"
+      },
+      {
+        "gates": [
+          "G-quarantine"
+        ],
+        "id": "A-3",
+        "kind": "functional",
+        "statement": "Exactly min_samples outcomes are enough to decide; the boundary is inclusive"
+      },
+      {
+        "gates": [
+          "G-quarantine"
+        ],
+        "id": "A-4",
+        "kind": "functional",
+        "statement": "quarantine() returns only flaky gates, sorted, and never quarantines insufficient data"
+      },
+      {
+        "gates": [
+          "G-regression"
+        ],
+        "id": "A-5",
+        "kind": "safety",
+        "statement": "The pre-existing engine regression suite still passes on the integrated tree"
+      },
+      {
+        "gates": [
+          "G-service"
+        ],
+        "id": "A-6",
+        "kind": "safety",
+        "statement": "The shipped linksvc service still passes its own acceptance harness"
+      },
+      {
+        "gates": [
+          "G-deploy",
+          "G-budget-ready",
+          "G-budget-p50"
+        ],
+        "id": "A-7",
+        "kind": "operability",
+        "statement": "The fleet can still deploy a running system and probe it: ready under 10s, p50 under 50ms"
+      }
+    ],
+    "baseline_from": "..",
+    "budgets": {
+      "deploy_p50_ms": 50.0,
+      "deploy_ready_seconds": 10.0
+    },
+    "components": [
+      {
+        "acceptance_ids": [
+          "A-1",
+          "A-2",
+          "A-3",
+          "A-4"
+        ],
+        "contract_ids": [
+          "C-V03"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "classify() returns exactly the four documented keys",
+          "insufficient data - including the empty sample - is never given a verdict",
+          "min_samples is an inclusive boundary",
+          "quarantine() returns sorted flaky gate ids only"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "quarantine",
+        "name": "Flaky-gate quarantine",
+        "owns": [
+          "minifleet/quarantine.py",
+          "tests/test_quarantine.py"
+        ],
+        "responsibility": "Implement minifleet/quarantine.py: classify repeated gate outcomes and list the gates worth quarantining.",
+        "tests": [
+          "unit tests for stable, flaky and insufficient-data cases"
+        ]
+      }
+    ],
+    "constraints": [
+      "Python 3.12 standard library only",
+      "harness/ is frozen: workers may read it, never modify it",
+      "the engine's existing behaviour and the shipped linksvc service must be unaffected"
+    ],
+    "contracts": [
+      {
+        "content": "## Exact semantics\n\n`classify(outcomes, min_samples=3, flake_threshold=0.5)`:\n\n- `len(outcomes) < min_samples` -> verdict `insufficient-data`, `pass_rate` **None**, `samples` = len, `dominant` None. An empty list is the `samples: 0` case of this rule.\n- otherwise `pass_rate = round(passes / samples, 3)` and verdict is all of: `stable-pass` when the rate is 1.0, `stable-fail` when it is 0.0, otherwise `flaky`.\n- `dominant` is `pass` when `pass_rate >= flake_threshold` else `fail`; for a stable verdict it matches the verdict; for `insufficient-data` it is None.\n- `min_samples` <= 0 raises ValueError. A non-boolean entry raises TypeError.\n\n`quarantine(gates, min_samples=3, flake_threshold=0.5)` returns the gate ids whose verdict is exactly `flaky`, sorted ascending. Gates with insufficient data are never returned.",
+        "exports": {
+          "minifleet.quarantine.classify": "classify(outcomes: list[bool], min_samples: int = 3, flake_threshold: float = 0.5) -> {'verdict': str, 'pass_rate': float|None, 'samples': int, 'dominant': str|None}",
+          "minifleet.quarantine.quarantine": "quarantine(gates: dict[str, list[bool]], min_samples: int = 3, flake_threshold: float = 0.5) -> list[str]"
+        },
+        "frozen": true,
+        "id": "C-V03",
+        "path": "contracts/C-V03.md",
+        "summary": "Frozen interface for flaky-gate quarantine."
+      }
+    ],
+    "deliverables": [
+      "minifleet/quarantine.py - classify repeated gate outcomes and list flaky gates",
+      "tests/test_quarantine.py - the worker's own tests",
+      "the existing engine, service and deployment gates, still green"
+    ],
+    "gate_defs": [
+      {
+        "attributed_to": [],
+        "cmd": "python3 -m unittest discover -s tests -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-unit",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "task",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "worker's own tests plus the baseline suite"
+      },
+      {
+        "attributed_to": [
+          "quarantine"
+        ],
+        "cmd": "python3 -m unittest harness.test_quarantine -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-quarantine",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "frozen quarantine contract"
+      },
+      {
+        "attributed_to": [],
+        "cmd": "python3 -m unittest discover -s tests",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-regression",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "engine regression on the integrated tree"
+      },
+      {
+        "attributed_to": [],
+        "cmd": "cd examples/linksvc && python3 -m unittest harness.test_accept -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-service",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "shipped service still passes its own harness"
+      },
+      {
+        "attributed_to": [],
+        "cmd": "python3 -m minifleet deploy --dir examples/linksvc --cmd \"python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-v03-deploy.db --rate 1000 --burst 1000\" --probe /healthz --seconds 3 --emit-metrics",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-deploy",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "deploy and observe the shipped service"
+      },
+      {
+        "attributed_to": [],
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-budget-ready",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "budget",
+        "metric": "deploy_ready_seconds",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 10.0,
+        "timeout": 300.0,
+        "title": "the service becomes ready quickly"
+      },
+      {
+        "attributed_to": [],
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-budget-p50",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "budget",
+        "metric": "deploy_p50_ms",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 50.0,
+        "timeout": 300.0,
+        "title": "the deployed service answers quickly"
+      },
+      {
+        "attributed_to": [],
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-layout",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "files",
+        "metric": "",
+        "op": "<=",
+        "paths": [
+          "minifleet/quarantine.py",
+          "ACCEPTANCE.md"
+        ],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 300.0,
+        "title": "the new module is where the contract says"
+      }
+    ],
+    "harness_dir": "harness-quarantine",
+    "id": "minifleet-v03-quarantine",
+    "out_of_scope": [
+      "automatically re-running gates to collect samples",
+      "persisting quarantine state between runs"
+    ],
+    "stakeholders": [
+      "the fleet operator",
+      "the on-call engineer who stops trusting red gates"
+    ],
+    "summary": "The fleet adds flaky-gate quarantine to itself, and the run is used to test the fleet's own repair loop with a deliberately injected defect.",
+    "title": "MiniFleet v0.3: quarantine flaky gates"
+  },
+  "intent_id": "minifleet-v03-quarantine",
+  "raw_intent": "A gate that red-lights an unlucky run teaches people to ignore red, so the fleet needs to tell a flaky gate from a broken one. Add minifleet/quarantine.py: classify a series of gate outcomes as insufficient-data, stable-pass, stable-fail or flaky, and list the gates worth quarantining. Refuse to decide on a sample smaller than the minimum. Do this without breaking the engine, the shipped service, or the deployment path.",
+  "repo_dir": "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/product",
+  "status": "passed",
+  "updated_at": 1789048192.5933774,
+  "verdict": "pass: all required gates green"
+}
