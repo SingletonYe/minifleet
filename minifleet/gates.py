@@ -26,6 +26,32 @@ from .model import Evidence, Gate
 
 METRIC_PREFIX = "MINIFLEET_METRIC"
 OUTPUT_TAIL_CHARS = 4000
+DIAGNOSIS_CHARS = 260
+
+
+def diagnose(output: str, limit: int = DIAGNOSIS_CHARS) -> str:
+    """The part of a failing command's output a worker can act on.
+
+    A gate that only says ``exit=1`` turns every repair into a scavenger hunt
+    through the ledger. The failing gate's own output is the most useful thing the
+    fleet can hand to the next attempt, so it is lifted into the evidence detail -
+    and from there into the repair packet and the report.
+    """
+
+    markers = ("AssertionError", "Error", "error:", "FAILED", "Traceback", "not ok")
+    interesting: list[str] = []
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped and any(marker in stripped for marker in markers):
+            interesting.append(stripped)
+    if not interesting:
+        lines = [line.strip() for line in output.splitlines() if line.strip()]
+        interesting = lines[-2:]
+    seen: list[str] = []
+    for line in interesting:
+        if line not in seen:
+            seen.append(line)
+    return " | ".join(seen)[:limit]
 
 
 class MetricStore:
@@ -141,10 +167,15 @@ class GateRunner:
         if metrics:
             self.metrics.update(metrics)
         status = "pass" if proc.returncode in gate.expect_exit else "fail"
+        detail = f"exit={proc.returncode} (expected {gate.expect_exit})"
+        if status == "fail":
+            diagnosis = diagnose(output)
+            if diagnosis:
+                detail = f"{detail}: {diagnosis}"
         evidence = Evidence(
             gate_id=gate.id,
             status=status,
-            detail=f"exit={proc.returncode} (expected {gate.expect_exit})",
+            detail=detail,
             exit_code=proc.returncode,
             duration_s=time.time() - started,
             metrics=metrics,

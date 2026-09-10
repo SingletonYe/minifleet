@@ -203,6 +203,23 @@ class GateTests(unittest.TestCase):
         self.assertTrue(verdict(evidence, {"G1"}).startswith("pass"))
         self.assertTrue(verdict(evidence, {"G1", "G2"}).startswith("fail"))
 
+    def test_failing_command_carries_its_diagnosis_into_the_detail(self):
+        gate = Gate(
+            id="G-diag", title="fails loudly",
+            cmd=(
+                "python3 -c \"import sys; "
+                "print('AssertionError: 1 != 2'); sys.exit(1)\""
+            ),
+        )
+        evidence = self.runner.run(gate)
+        self.assertEqual(evidence.status, "fail")
+        self.assertIn("exit=1", evidence.detail)
+        self.assertIn("AssertionError: 1 != 2", evidence.detail)
+
+    def test_passing_gate_detail_stays_quiet(self):
+        evidence = self.runner.run(Gate(id="G-quiet", title="ok", cmd="python3 -c \"print('noise')\""))
+        self.assertEqual(evidence.detail, "exit=0 (expected [0])")
+
 
 class WorktreeTests(unittest.TestCase):
     def test_ownership_conflict_detection(self):
@@ -480,16 +497,23 @@ class RepairLoopTests(unittest.TestCase):
             scheduler.dispatch(FakeDispatcher({"T-calc": MODULE_FILES}))
             scheduler.ingest("T-calc")
             scheduler.integrate()
-            scheduler.verify()
 
             task = scheduler.task("T-calc")
             task.attempts = 3
             scheduler.persist()
 
-            result = scheduler.repair_failed(max_attempts=3)
-            self.assertEqual(result["escalated"], ["T-calc"])
-            self.assertEqual(result["reopened"], [])
+            verification = scheduler.verify(max_attempts=3)
+            self.assertEqual(verification["attribution"]["escalated"], ["T-calc"])
+            self.assertEqual(verification["attribution"]["reopened"], [])
             self.assertEqual(task.state, TaskState.FAILED.value)
+
+            # A second call must not silently reopen what the budget just refused.
+            # It may still report the escalation - that is the signal the operator
+            # needs - but it must not hand out another attempt.
+            again = scheduler.repair_failed(max_attempts=3)
+            self.assertEqual(again["reopened"], [])
+            self.assertEqual(again["escalated"], ["T-calc"])
+            self.assertEqual(task.attempts, 3)
 
     def test_deploy_metrics_are_flattened_for_budget_gates(self):
         from minifleet.deploy import metrics_from_report

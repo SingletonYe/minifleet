@@ -308,6 +308,7 @@ class Run:
     events: list[dict[str, Any]] = field(default_factory=list)
     raw_intent: str = ""
     verdict: str = ""
+    attributed_verdict: str = ""
 
     # -- persistence -----------------------------------------------------
     def to_dict(self) -> dict[str, Any]:

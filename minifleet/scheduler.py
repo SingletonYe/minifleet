@@ -266,7 +266,11 @@ class Scheduler:
             )
 
         attribution = {"reopened": [], "escalated": [], "unattributed": []}
-        needs_attribution = bool(self.run.verdict) and not self.run.verdict.startswith("pass")
+        needs_attribution = (
+            bool(self.run.verdict)
+            and not self.run.verdict.startswith("pass")
+            and self.run.verdict != self.run.attributed_verdict
+        )
         if needs_attribution:
             latest: dict[str, dict[str, Any]] = {}
             for row in self.run.evidence:
@@ -346,6 +350,10 @@ class Scheduler:
             if self.run.status == RunStatus.FAILED.value
             else {"reopened": [], "unattributed": [], "escalated": []}
         )
+        if self.run.status == RunStatus.FAILED.value:
+            # Remember that this verdict has already produced its repair packets, so
+            # a caller that also invokes repair_failed() does not attribute twice.
+            self.run.attributed_verdict = result
         self.persist()
         ledger.append(
             self.run, self.run_dir, "system.verified", verdict=result,

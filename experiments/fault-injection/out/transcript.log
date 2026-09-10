@@ -1,0 +1,78 @@
+
+$ minifleet plan --intent /home/user/workspace/minifleet/intents/quarantine.json --runs-dir /home/user/workspace/minifleet/experiments/fault-injection/runs   (0.2s, exit 0)
+baseline : brownfield from /home/user/workspace/minifleet [git-revision] 120 files @ 748b1afd1c1ca6ee366fc1d711bd26c73b994c54
+run      : 20260910T134427Z-minifleet-v03-quarantine-853030
+run dir  : /home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134427Z-minifleet-v03-quarantine-853030
+tasks    : 1  gates: 8  contracts: 1
+ready    : T-quarantine
+
+
+$ minifleet autopilot --run /home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134427Z-minifleet-v03-quarantine-853030 --dispatcher command:/usr/bin/python3 /home/user/workspace/minifleet/experiments/fault-injection/workers/worker.py --max-attempts 3 --max-rounds 4   (39.8s, exit 0)
+--- round 1: dispatch ---
+  T-quarantine      verified  {'G-unit': 'pass'}
+  verify: fail: G-quarantine=fail
+  repair: reopened=['T-quarantine'] escalated=[]
+--- round 2: dispatch ---
+  T-quarantine      verified  {'G-unit': 'pass'}
+  verify: pass: all required gates green
+
+status : passed
+verdict: pass: all required gates green
+rounds : 2
+report : /home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134427Z-minifleet-v03-quarantine-853030/report.html
+
+
+$ minifleet deploy --dir examples/linksvc --cmd python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-experiment.db --rate 1000 --burst 1000 --probe /healthz --seconds 4 --emit-metrics   (4.4s, exit 0)
+{
+  "cmd": "python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-experiment.db --rate 1000 --burst 1000",
+  "dir": "examples/linksvc",
+  "exit_code": 0,
+  "ok": true,
+  "probe": "/healthz",
+  "ready": {
+    "port": 34773,
+    "ready": true,
+    "seconds": 0.065,
+    "stdout_tail": "MINIFLEET_READY {\"port\": 34773}\n{\"burst\": 1000, \"db\": \"/tmp/minifleet-experiment.db\", \"event\": \"listening\", \"host\": \"127.0.0.1\", \"level\": \"info\", \"port\": 34773, \"rate\": 1000.0, \"ts\": 1789047907.137233}"
+  },
+  "smoke": {
+    "ok": true,
+    "seconds": 0.0237,
+    "status": 200
+  },
+  "soak": {
+    "failures": 0,
+    "max_ms": 2.101,
+    "ok": true,
+    "p50_ms": 1.757,
+    "samples": 17
+  },
+  "url": "http://127.0.0.1:34773/healthz"
+}
+MINIFLEET_METRIC {"name": "deploy_ok", "value": 1.0}
+MINIFLEET_METRIC {"name": "deploy_ready_seconds", "value": 0.065}
+MINIFLEET_METRIC {"name": "deploy_smoke_ms", "value": 23.7}
+MINIFLEET_METRIC {"name": "deploy_smoke_status", "value": 200.0}
+MINIFLEET_METRIC {"name": "deploy_p50_ms", "value": 1.757}
+MINIFLEET_METRIC {"name": "deploy_max_ms", "value": 2.101}
+MINIFLEET_METRIC {"name": "deploy_samples", "value": 17.0}
+MINIFLEET_METRIC {"name": "deploy_failures", "value": 0.0}
+
+
+$ minifleet fleetmetrics --run /home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134427Z-minifleet-v03-quarantine-853030   (0.1s, exit 0)
+{
+  "attempts_total": 2,
+  "critical_path_seconds": 27.37,
+  "failed": 0,
+  "gates_failed": 1,
+  "gates_passed": 15,
+  "gates_total": 16,
+  "merged": 1,
+  "retries": 1,
+  "slowest_task": {
+    "id": "T-quarantine",
+    "seconds": 27.37
+  },
+  "tasks": 1,
+  "verdict": "pass: all required gates green"
+}
