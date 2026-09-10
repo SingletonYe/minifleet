@@ -44,3 +44,48 @@ jobs:
       - name: Non-functional budgets
         working-directory: examples/linksvc
         run: python -m harness.perf_probe
+
+  self-hosting:
+    # The v0.2 modules (repair, deploy, fleetmetrics) were written by the fleet
+    # itself from intents/minifleet-selfhost.json, against the contract harness
+    # frozen in intents/harness-selfhost/. This job rebuilds the integrated tree
+    # that run ended with and grades it with that same frozen harness, so the
+    # claim recorded in evidence/selfhost-run/ is reproducible by a third party.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Rebuild the integrated product tree
+        run: |
+          mkdir -p /tmp/selfhost
+          cp -r minifleet tests /tmp/selfhost/
+          cp -r intents/harness-selfhost /tmp/selfhost/harness
+      - name: Layout gate (every produced module exists)
+        run: |
+          for path in minifleet/repair.py minifleet/deploy.py minifleet/fleetmetrics.py; do
+            test -f "/tmp/selfhost/$path" || { echo "missing $path"; exit 1; }
+          done
+      - name: Frozen contract harness
+        working-directory: /tmp/selfhost
+        run: python -m unittest harness.test_contract -v
+      - name: Frozen CLI wiring harness
+        working-directory: /tmp/selfhost
+        run: python -m unittest harness.test_wiring -v
+      - name: Regression suite (the floor the run had to keep)
+        working-directory: /tmp/selfhost
+        run: python -m unittest discover -s tests
+      - name: Budget gate (engine_tests_ms)
+        working-directory: /tmp/selfhost
+        run: |
+          out=$(python -m harness.bench)
+          echo "$out"
+          python - "$out" <<'PY'
+          import json, re, sys
+
+          match = re.search(r"MINIFLEET_METRIC (\{.*\})", sys.argv[1])
+          value = json.loads(match.group(1))["value"]
+          assert value <= 60000.0, f"engine_tests_ms={value} exceeds the 60000 ms budget"
+          print(f"engine_tests_ms={value} <= 60000 -> ok")
+          PY
