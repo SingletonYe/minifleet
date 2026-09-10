@@ -70,7 +70,13 @@ class Repo:
         self.path = Path(self.path)
 
     # -- lifecycle -------------------------------------------------------
-    def init(self, baseline: dict[str, str], branch: str = "main") -> str:
+    def init(
+        self,
+        baseline: dict[str, str],
+        branch: str = "main",
+        overwrite: bool = True,
+        fleet_owned: tuple[str, ...] = (),
+    ) -> str:
         self.path.mkdir(parents=True, exist_ok=True)
         if not (self.path / ".git").exists():
             git(["init", "-q", "-b", branch], self.path)
@@ -78,6 +84,8 @@ class Repo:
             git(["config", "user.email", "fleet@minifleet.local"], self.path)
         for rel, content in baseline.items():
             target = self.path / rel
+            if target.exists() and not overwrite and not rel.startswith(fleet_owned):
+                continue
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content)
         git(["add", "-A"], self.path)

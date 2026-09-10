@@ -54,6 +54,14 @@ python3 -m minifleet run --intent intents/linksvc.json --dispatcher "command:./e
 
 ## Dispatchers
 
+### Brownfield intents
+
+An intent may declare `"baseline_from": "<path>"` instead of starting from an empty repository. The
+fleet then adopts that existing tree as the product baseline - it copies the codebase, commits it
+untouched, and only then lays out worktrees. Generated artefacts (`ACCEPTANCE.md`, `INTENT.md`,
+`contracts/`, `harness/`) are fleet-owned and may overwrite; everything else in the adopted
+repository is preserved, which is what lets the fleet work on its own source code.
+
 A dispatcher is how a task packet reaches an agent runtime. The packet is deliberately
 self-contained, so workers can be different models, different vendors, or different CLIs.
 

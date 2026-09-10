@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -90,7 +91,17 @@ def cmd_plan(args: argparse.Namespace) -> int:
     baseline = baseline_files(spec, design)
     baseline.update(harness_files(args.intent, spec))
     baseline["INTENT.md"] = f"# Intent as received\n\n{_prose(raw)}\n\n```json\n{raw.strip()}\n```\n"
-    scheduler.repo.init(baseline)
+
+    brownfield = bool(spec.baseline_from)
+    if brownfield:
+        source = (Path(args.intent).parent / spec.baseline_from).resolve()
+        copied = copy_baseline_tree(source, Path(run.repo_dir))
+        print(f"baseline : brownfield from {source} ({copied} files)")
+    scheduler.repo.init(
+        baseline,
+        overwrite=not brownfield,
+        fleet_owned=("ACCEPTANCE.md", "INTENT.md", "contracts/", "harness/"),
+    )
     scheduler.repo.ensure_branch(run.integration_branch)
     scheduler.refresh()
     scheduler.packets()
@@ -347,6 +358,33 @@ def harness_files(intent_path: str, spec: IntentSpec) -> dict[str, str]:
             rel = path.relative_to(root).as_posix()
             files[f"harness/{rel}"] = path.read_text()
     return files
+
+
+IGNORED_DIRS = {".git", "__pycache__", "runs", ".pytest_cache", ".mypy_cache", "node_modules", "site"}
+IGNORED_SUFFIXES = {".pyc", ".pyo", ".so", ".sqlite", ".db", ".png", ".jpg", ".zip", ".whl"}
+MAX_COPY_BYTES = 512 * 1024
+
+
+def copy_baseline_tree(source: Path, destination: Path) -> int:
+    """Adopt an existing codebase as the product tree (brownfield intents)."""
+
+    if not source.is_dir():
+        raise FileNotFoundError(f"baseline_from not found: {source}")
+    destination.mkdir(parents=True, exist_ok=True)
+    count = 0
+    for path in sorted(source.rglob("*")):
+        rel = path.relative_to(source)
+        if any(part in IGNORED_DIRS for part in rel.parts):
+            continue
+        if path.is_dir():
+            continue
+        if path.suffix in IGNORED_SUFFIXES or path.stat().st_size > MAX_COPY_BYTES:
+            continue
+        target = destination / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
+        count += 1
+    return count
 
 
 def _readme(spec: IntentSpec, design: Design) -> str:

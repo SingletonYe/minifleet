@@ -1,0 +1,64 @@
+{
+  "id": "20260101T000000Z-fixture-aaaaaa",
+  "intent_id": "fixture",
+  "status": "failed",
+  "verdict": "fail: G-system=fail",
+  "dispatcher": "packet",
+  "integration_branch": "integration",
+  "repo_dir": "",
+  "raw_intent": "fixture run used to test the repair path",
+  "created_at": 1000000.0,
+  "updated_at": 1000050.0,
+  "intent": {
+    "id": "fixture",
+    "title": "Fixture",
+    "summary": "",
+    "deliverables": [],
+    "acceptance": [],
+    "constraints": [],
+    "budgets": {},
+    "out_of_scope": [],
+    "components": [],
+    "gates": [],
+    "contracts": [],
+    "harness_dir": "",
+    "baseline_from": ""
+  },
+  "design": {
+    "intent_id": "fixture",
+    "components": [],
+    "contracts": [],
+    "gates": [],
+    "risks": [],
+    "decisions": [],
+    "repairs": [],
+    "tasks": [
+      {"id": "T-a", "title": "a", "role": "builder", "goal": "a", "owns": ["a.py"],
+       "depends_on": [], "state": "merged", "attempts": 1, "submitted_files": ["a.py"],
+       "started_at": 1000000.0, "finished_at": 1000010.0},
+      {"id": "T-b", "title": "b", "role": "builder", "goal": "b", "owns": ["b.py"],
+       "depends_on": [], "state": "merged", "attempts": 1, "submitted_files": ["b.py"],
+       "started_at": 1000000.0, "finished_at": 1000028.0},
+      {"id": "T-c", "title": "c", "role": "builder", "goal": "c", "owns": ["c.py"],
+       "depends_on": ["T-a"], "state": "merged", "attempts": 1, "submitted_files": ["c.py"],
+       "started_at": 1000010.0, "finished_at": 1000040.0},
+      {"id": "T-d", "title": "d", "role": "builder", "goal": "d", "owns": ["d.py"],
+       "depends_on": ["T-c"], "state": "verified", "attempts": 1, "submitted_files": ["d.py"],
+       "started_at": 1000040.0, "finished_at": 1000050.0},
+      {"id": "T-e", "title": "e", "role": "builder", "goal": "e", "owns": ["e.py"],
+       "depends_on": ["T-b"], "state": "failed", "attempts": 2, "submitted_files": ["e.py"],
+       "evidence": [
+         {"gate_id": "G-unit", "status": "fail", "detail": "exit=1: 2 tests failed"},
+         {"gate_id": "G-lint", "status": "pass", "detail": "exit=0"}
+       ],
+       "started_at": 1000028.0, "finished_at": 1000033.0}
+    ]
+  },
+  "evidence": [
+    {"gate_id": "G-1", "status": "pass", "duration_s": 1.0, "metrics": {}, "detail": ""},
+    {"gate_id": "G-2", "status": "pass", "duration_s": 1.0, "metrics": {}, "detail": ""},
+    {"gate_id": "G-3", "status": "pass", "duration_s": 1.0, "metrics": {}, "detail": ""},
+    {"gate_id": "G-4", "status": "fail", "duration_s": 1.0, "metrics": {}, "detail": "system gate failed"}
+  ],
+  "events": []
+}

@@ -81,6 +81,7 @@ class IntentSpec:
     gate_defs: list["Gate"] = field(default_factory=list)
     contracts: list["Contract"] = field(default_factory=list)
     harness_dir: str = ""
+    baseline_from: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "IntentSpec":
@@ -98,6 +99,7 @@ class IntentSpec:
             gate_defs=[Gate.from_dict(g) for g in data.get("gates", [])],
             contracts=[Contract.from_dict(c) for c in data.get("contracts", [])],
             harness_dir=data.get("harness_dir", ""),
+            baseline_from=data.get("baseline_from", ""),
         )
 
     def to_dict(self) -> dict[str, Any]:

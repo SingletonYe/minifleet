@@ -209,6 +209,37 @@ class WorktreeTests(unittest.TestCase):
         conflicts = wt.ownership_conflicts({"a": ["x.py", "y.py"], "b": ["y.py", "z.py"]})
         self.assertEqual(conflicts, [("a", "b", ["y.py"])])
 
+    def test_brownfield_baseline_is_adopted_without_clobbering(self):
+        from minifleet.cli import copy_baseline_tree
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "legacy"
+            (source / "pkg").mkdir(parents=True)
+            (source / "pkg" / "old.py").write_text("value = 1\n")
+            (source / "README.md").write_text("# the original readme\n")
+            (source / "runs").mkdir()
+            (source / "runs" / "junk.json").write_text("{}")
+            (source / "__pycache__").mkdir()
+            (source / "__pycache__" / "x.pyc").write_text("binary")
+
+            destination = Path(tmp) / "product"
+            copied = copy_baseline_tree(source, destination)
+
+            self.assertEqual(copied, 2)
+            self.assertTrue((destination / "pkg" / "old.py").exists())
+            self.assertFalse((destination / "runs").exists())
+            self.assertFalse((destination / "__pycache__").exists())
+
+            repo = wt.Repo(destination)
+            repo.init(
+                {"README.md": "# generated\n", "ACCEPTANCE.md": "frozen\n"},
+                overwrite=False,
+                fleet_owned=("ACCEPTANCE.md", "INTENT.md", "contracts/", "harness/"),
+            )
+            self.assertEqual((destination / "README.md").read_text(), "# the original readme\n")
+            self.assertEqual((destination / "ACCEPTANCE.md").read_text(), "frozen\n")
+            self.assertTrue(repo.head())
+
 
 class EndToEndTests(unittest.TestCase):
     def test_full_run_passes_and_is_auditable(self):

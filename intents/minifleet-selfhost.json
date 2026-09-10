@@ -1,0 +1,140 @@
+{
+  "id": "minifleet-v02",
+  "title": "MiniFleet v0.2: autonomy on failure, deployment, fleet metrics",
+  "summary": "The fleet upgrades itself: it adopts its own codebase, adds the three capabilities it was missing (bounded self-repair from gate evidence, a supervised deploy-and-observe stage, and fleet-level metrics), and proves it did not break the existing engine.",
+  "intent": "Continue replicating Fleet by making MiniFleet more autonomous. It must be able to (1) turn a failed task into a repair packet that a worker can act on, bounded by a maximum number of attempts, (2) actually deploy a produced system: start it, wait for its ready line, probe it, soak it for a short window and shut it down, and (3) account for its own runs - attempts, retries, gate outcomes and the critical path through the task graph. All three must be reachable from the CLI. The existing engine behaviour must be preserved: the current regression suite is the floor, not a suggestion.",
+  "stakeholders": ["the fleet operator", "whoever inherits this repository"],
+  "deliverables": [
+    "minifleet/repair.py - turn gate evidence into a bounded, actionable repair packet",
+    "minifleet/deploy.py - supervised process launch, ready detection, smoke and soak probes",
+    "minifleet/fleetmetrics.py - attempts, retries, gate outcomes and critical path of a run",
+    "cli wiring so `repair`, `deploy` and `fleetmetrics` are real subcommands",
+    "the existing engine tests, still green"
+  ],
+  "constraints": [
+    "Python 3.12 standard library only",
+    "the frozen contract in contracts/C-V02.md is not renegotiable",
+    "harness/ is frozen: workers may read it, never modify it",
+    "no new third-party dependency may be introduced"
+  ],
+  "out_of_scope": [
+    "publishing to a cloud provider; deploy means supervised local execution in the workspace",
+    "multi-host orchestration",
+    "an LLM-backed planner"
+  ],
+  "budgets": {
+    "engine_tests_ms": 60000.0
+  },
+  "acceptance": [
+    {"id": "A-1", "kind": "functional", "statement": "A repair packet lists only the failing gates, in gate-id order, carries the task write scope and never mutates its inputs", "gates": ["G-contract"]},
+    {"id": "A-2", "kind": "safety", "statement": "Repair is bounded: once the attempt budget is exhausted the packet sets escalate instead of proposing another attempt", "gates": ["G-contract"]},
+    {"id": "A-3", "kind": "operability", "statement": "A supervisor starts a process, parses its ready line and port, times out without hanging when no ready line arrives, and always tears the process down", "gates": ["G-contract"]},
+    {"id": "A-4", "kind": "operability", "statement": "Smoke and soak probes report status, sample count, failure count and latency percentiles", "gates": ["G-contract"]},
+    {"id": "A-5", "kind": "functional", "statement": "Fleet metrics report tasks, merged, failed, attempts, retries, gate outcomes and the critical path through the task graph", "gates": ["G-contract"]},
+    {"id": "A-6", "kind": "functional", "statement": "repair, deploy and fleetmetrics are CLI subcommands; repair writes one repair packet per failed task and reports cleanly when nothing failed", "gates": ["G-wiring"]},
+    {"id": "A-7", "kind": "safety", "statement": "The pre-existing engine behaviour is unchanged: the regression suite that shipped with the baseline still passes on the integrated tree", "gates": ["G-regression"]},
+    {"id": "A-8", "kind": "nfr", "statement": "The regression suite still finishes within 60 seconds", "gates": ["G-budget-bench"]}
+  ],
+  "gates": [
+    {"id": "G-unit", "title": "worker's own tests plus the baseline suite", "kind": "cmd", "scope": "task",
+     "cmd": "python3 -m unittest discover -s tests -v", "timeout": 900},
+    {"id": "G-contract", "title": "v0.2 contract conformance", "kind": "cmd", "scope": "system",
+     "cmd": "python3 -m unittest harness.test_contract -v", "timeout": 900},
+    {"id": "G-wiring", "title": "CLI wiring", "kind": "cmd", "scope": "system",
+     "cmd": "python3 -m unittest harness.test_wiring -v", "timeout": 900},
+    {"id": "G-regression", "title": "engine regression on the integrated tree", "kind": "cmd", "scope": "system",
+     "cmd": "python3 -m unittest discover -s tests", "timeout": 900},
+    {"id": "G-bench", "title": "measure the regression suite", "kind": "cmd", "scope": "system",
+     "cmd": "python3 -m harness.bench", "timeout": 900},
+    {"id": "G-budget-bench", "title": "regression suite stays cheap", "kind": "budget", "scope": "system",
+     "metric": "engine_tests_ms", "op": "<=", "threshold": 60000.0},
+    {"id": "G-layout", "title": "new modules present", "kind": "files", "scope": "system",
+     "paths": ["minifleet/repair.py", "minifleet/deploy.py", "minifleet/fleetmetrics.py", "ACCEPTANCE.md"]}
+  ],
+  "contracts": [
+    {
+      "id": "C-V02",
+      "path": "contracts/C-V02.md",
+      "summary": "Frozen interfaces for the three v0.2 modules and the CLI surface that exposes them.",
+      "exports": {
+        "minifleet.repair.build_repair_packet": "build_repair_packet(task: dict, evidence: list[dict], attempt: int, max_attempts: int = 3) -> dict with keys task_id, attempt, max_attempts, escalate, reason, failing_gates[{gate_id,status,detail}], instructions[list[str]], scope[list[str]], carry_forward[list[str]]",
+        "minifleet.deploy.Supervisor": "Supervisor(argv: list[str], cwd: str, ready_prefix: str = 'MINIFLEET_READY', timeout: float = 30.0) with .start() -> Supervisor, .wait_ready() -> {'ready': bool, 'port': int|None, 'seconds': float, 'stdout_tail': str}, .stop(timeout: float = 10.0) -> int, .running -> bool",
+        "minifleet.deploy.smoke": "smoke(url: str, timeout: float = 5.0) -> {'status': int, 'ok': bool, 'seconds': float}",
+        "minifleet.deploy.soak": "soak(url: str, seconds: float, interval: float = 0.25, timeout: float = 5.0) -> {'samples': int, 'failures': int, 'ok': bool, 'p50_ms': float, 'max_ms': float}",
+        "minifleet.fleetmetrics.summarize": "summarize(run: dict) -> {'tasks': int, 'merged': int, 'failed': int, 'attempts_total': int, 'retries': int, 'gates_total': int, 'gates_passed': int, 'gates_failed': int, 'critical_path_seconds': float, 'slowest_task': {'id': str, 'seconds': float} | None, 'verdict': str}",
+        "minifleet cli": "python3 -m minifleet repair --run DIR writes packets/<task>.repair.json for every failed task and prints 'no failed tasks' when there are none; python3 -m minifleet deploy --dir DIR --cmd CMD --probe PATH [--seconds N] starts the process, waits for its ready line, smokes and soaks the probe path, prints a JSON report and exits non-zero when the probe fails; python3 -m minifleet fleetmetrics --run DIR prints the summarize() JSON on stdout"
+      },
+      "content": "## Behavioural notes\n\n### repair\n`failing_gates` contains every evidence entry whose status is not `pass`, sorted by `gate_id`. `instructions` is a non-empty list of short, imperative sentences that name the failing gate ids so a worker can act without reading the ledger. `scope` is a copy of `task['owns']`. `carry_forward` is a copy of `task.get('submitted_files', [])`. `escalate` is True when `attempt >= max_attempts`. `reason` is a one-line summary of the failure. The function must not mutate `task` or `evidence`.\n\n### deploy\n`Supervisor.wait_ready()` reads the child's stdout line by line until a line starts with `ready_prefix`, parses the JSON payload after it (so `{\"port\": 4242}` yields `port=4242`), and returns within `timeout` seconds. On timeout it returns `ready: False` and a `stdout_tail` of what was seen; it must not hang and must leave `running` False after `stop()`. `stop()` sends SIGTERM, waits up to its timeout, escalates to SIGKILL if needed, and returns the exit code.\n`smoke(url)` performs one GET and returns the status code, whether it was 2xx (`ok`), and the elapsed seconds. `soak(url, seconds, interval)` repeats GETs until `seconds` have elapsed, counts samples and failures (non-2xx counts as a failure), and reports `p50_ms`/`max_ms`. A dead endpoint must produce failures rather than an exception.\n\n### fleetmetrics\n`summarize(run)` takes a decoded `run.json`. `critical_path_seconds` is the longest chain of task durations following `depends_on` edges - it is not the sum of all durations. Task duration is `finished_at - started_at`, treated as 0 when either bound is missing. `slowest_task` is the task with the largest duration, or None when there are no tasks. `retries` is the sum of `max(attempts - 1, 0)`. `merged` counts tasks in state `merged`.\n\n### CLI\n`repair` must work on a run directory that contains only `run.json` plus a `packets/` directory, creating `packets/` if needed. It must not require a git repository."
+    }
+  ],
+  "harness_dir": "harness-selfhost",
+  "baseline_from": "..",
+  "components": [
+    {
+      "id": "repair",
+      "name": "Bounded self-repair",
+      "responsibility": "Implement minifleet/repair.py, turning gate evidence into an actionable, bounded repair packet.",
+      "owns": ["minifleet/repair.py", "tests/test_repair.py"],
+      "contract_ids": ["C-V02"],
+      "acceptance_ids": ["A-1", "A-2"],
+      "gate_ids": ["G-unit"],
+      "done_when": [
+        "build_repair_packet matches the frozen signature and returns every documented key",
+        "failing gates are ordered by gate_id and exclude every passing gate",
+        "instructions name each failing gate id",
+        "the attempt budget is respected: escalate is set once it is exhausted",
+        "inputs are not mutated"
+      ],
+      "tests": ["unit tests covering ordering, escalation, empty evidence and non-mutation"]
+    },
+    {
+      "id": "deploy",
+      "name": "Deploy and observe",
+      "responsibility": "Implement minifleet/deploy.py: supervised process launch with ready detection, plus smoke and soak probes.",
+      "owns": ["minifleet/deploy.py", "tests/test_deploy.py"],
+      "contract_ids": ["C-V02"],
+      "acceptance_ids": ["A-3", "A-4"],
+      "gate_ids": ["G-unit"],
+      "done_when": [
+        "Supervisor.start/wait_ready/stop behave as specified and never leak a child process",
+        "a missing ready line returns ready False within the timeout instead of hanging",
+        "smoke reports status, ok and elapsed time",
+        "soak reports samples, failures, ok, p50_ms and max_ms, and survives a dead endpoint"
+      ],
+      "tests": ["tests that spawn a real child process and a real in-process HTTP server"]
+    },
+    {
+      "id": "fleetmetrics",
+      "name": "Fleet metrics",
+      "responsibility": "Implement minifleet/fleetmetrics.py: account for a run - attempts, retries, gate outcomes and the critical path.",
+      "owns": ["minifleet/fleetmetrics.py", "tests/test_fleetmetrics.py"],
+      "contract_ids": ["C-V02"],
+      "acceptance_ids": ["A-5"],
+      "gate_ids": ["G-unit"],
+      "done_when": [
+        "summarize returns every documented key for a realistic run record",
+        "the critical path follows depends_on edges and is not the sum of all durations",
+        "an empty run summarises without raising"
+      ],
+      "tests": ["unit tests over synthetic run records, including a branching graph"]
+    },
+    {
+      "id": "wiring",
+      "name": "CLI and scheduler wiring",
+      "responsibility": "Wire the three new modules into the CLI (repair, deploy, fleetmetrics subcommands) and into the scheduler, without changing existing behaviour.",
+      "owns": ["minifleet/cli.py", "minifleet/scheduler.py", "tests/test_wiring.py"],
+      "depends_on": ["repair", "deploy", "fleetmetrics"],
+      "contract_ids": ["C-V02"],
+      "acceptance_ids": ["A-6", "A-7"],
+      "gate_ids": ["G-unit"],
+      "done_when": [
+        "python3 -m minifleet --help lists repair, deploy and fleetmetrics",
+        "repair writes packets/<task>.repair.json for each failed task and prints 'no failed tasks' otherwise",
+        "deploy starts a command, waits for its ready line, probes it, prints JSON and always tears it down",
+        "fleetmetrics prints the summarize() JSON",
+        "every pre-existing subcommand and its behaviour is preserved"
+      ],
+      "tests": ["a CLI-level test that drives the fixture run directory through the new subcommands"]
+    }
+  ]
+}
