@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang='en'><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>MiniFleet v0.2 - post-run audit</title>
+<style>
+:root { --bg:#0b0f14; --panel:#131a23; --line:#22303d; --ink:#e8eef5; --muted:#8ba0b4;
+        --ok:#3ddc97; --bad:#ff6b6b; --warn:#ffc857; --info:#57b8ff; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink);
+       font:15px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+header { padding:40px 28px 24px; border-bottom:1px solid var(--line);
+         background:linear-gradient(180deg,#101823,#0b0f14); }
+h1 { margin:0 0 6px; font-size:26px; letter-spacing:-.01em; }
+h2 { margin:36px 0 12px; font-size:18px; }
+h3 { margin:22px 0 8px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+.muted { color:var(--muted); }
+main { padding:24px 28px 64px; max-width:1180px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-top:18px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+.card .k { color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.08em; }
+.card .v { font-size:22px; font-weight:600; margin-top:4px; }
+table { width:100%; border-collapse:collapse; background:var(--panel);
+        border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+th,td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13.5px; }
+th { background:#0f1620; color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; }
+tr:last-child td { border-bottom:none; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; color:#cfe3ff; }
+pre { background:#0f1620; border:1px solid var(--line); border-radius:12px; padding:14px 16px; overflow:auto;
+      font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; color:#cfe3ff; }
+.pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11.5px;
+        border:1px solid var(--line); background:#0f1620; }
+.pill.pass,.pill.verified,.pill.merged { color:var(--ok); border-color:#1d5c43; background:#0f2620; }
+.pill.bad { color:var(--bad); border-color:#5c1d1d; background:#260f0f; }
+ul { margin:8px 0; padding-left:20px; }
+footer { padding:18px 28px 40px; color:var(--muted); font-size:12.5px; border-top:1px solid var(--line); }
+</style></head>
+<body>
+<div style="padding:12px 20px;background:#0b3d2e;color:#e8f5ef;font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif">
+<strong>Post-run audit</strong> &nbsp;·&nbsp; written by the operator, after the run, from a fresh clone &nbsp;·&nbsp;
+<a style="color:#9fe3c6" href="index.html">run record</a> &nbsp;·&nbsp;
+<a style="color:#9fe3c6" href="selfhost.html">v0.2 self-hosting run</a> &nbsp;·&nbsp;
+<a style="color:#9fe3c6" href="https://github.com/SingletonYe/minifleet">github.com/SingletonYe/minifleet</a>
+</div>
+<header>
+  <h1>Post-run audit - MiniFleet v0.2</h1>
+  <div class='muted'>The rule the run enforces applies to the run: a result is only worth what an
+  independent re-execution of it is worth. Nothing below is quoted from the run's own report.</div>
+  <div class='cards'>
+    <div class='card'><div class='k'>Re-verified</div><div class='v'>4/4</div></div>
+    <div class='card'><div class='k'>Capabilities driven by hand</div><div class='v'>3</div></div>
+    <div class='card'><div class='k'>Defects found</div><div class='v'>1</div></div>
+    <div class='card'><div class='k'>Fixed in</div><div class='v'>0106f59</div></div>
+  </div>
+</header>
+<main>
+  <h2>1. Rebuild and re-grade the integrated tree</h2>
+  <p>The run's product tree was cloned from its <code>integration</code> branch into a fresh
+  directory and the gates were re-executed there, not read out of the ledger.</p>
+  <pre>git clone --branch integration &lt;run&gt;/product /tmp/verify/repo
+python3 -m unittest harness.test_contract   # 11 tests, OK
+python3 -m unittest harness.test_wiring     #  4 tests, OK
+python3 -m unittest discover -s tests       # 48 tests, OK
+python3 -m harness.bench                    # engine_tests_ms=6736.0 (budget 60000)</pre>
+  <p>The frozen harness was also compared byte-for-byte against the baseline commit it was
+  frozen from: <code>test_contract.py</code>, <code>test_wiring.py</code>, <code>bench.py</code>
+  and <code>__init__.py</code> are identical, so the criteria could not have been edited to fit
+  the result. The same gates were then re-run on the landed <code>main</code> commit
+  (<code>ab7ff45</code>), where the suite is 49 tests: all green, and the new CI job
+  <code>self-hosting</code> rebuilds that tree from scratch on every push.</p>
+
+  <h2>2. Drive the three new capabilities by hand</h2>
+  <p>Unit tests can pass while the CLI path is broken, so each capability was also used for real.</p>
+  <table>
+    <thead><tr><th>Capability</th><th>What was run</th><th>What came back</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>repair</code></td>
+        <td>a copy of <code>harness/fixtures/failing-run</code> - a run record with no git repository</td>
+        <td>one packet for <code>T-e</code>, <code>failing_gates=[G-unit]</code>, <code>scope=[e.py]</code>, <code>escalate=false</code> at attempt 2/3, inputs untouched</td>
+      </tr>
+      <tr>
+        <td><code>deploy</code></td>
+        <td><code>minifleet deploy --dir examples/linksvc --cmd "python3 -m linksvc --port 0 ..." --probe /healthz --seconds 3</code></td>
+        <td>a real child process, ready line parsed (<code>port=36461</code>), smoke <code>200</code>, soak 13 samples / 0 failures, <code>p50_ms=1.75</code>, teardown exit code 0, no stray process</td>
+      </tr>
+      <tr>
+        <td><code>fleetmetrics</code></td>
+        <td><code>minifleet fleetmetrics --run &lt;this run&gt;</code></td>
+        <td>4 tasks, 4 merged, 0 failed, 10 gate observations, 0 retries, critical path 153.677 s, verdict <span class='pill pass'>pass</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p>The deploy probe is the point of the exercise: the artefact it supervised is the short-link
+  service that the <em>first</em> fleet run produced from an intent, so the chain
+  intent &rarr; built system &rarr; running system &rarr; observed system is closed end to end.</p>
+
+  <h2>3. The defect the run could not see</h2>
+  <p>The run reported that it had "adopted its own tree". The audit compared the adopted baseline
+  with the repository it was adopted from, file by file, by git blob hash.</p>
+  <pre>Product baseline (commit 812061c)          Repository baseline (commit fbf1538)
+tests/test_engine.py   334 lines           tests/test_engine.py   365 lines
+                       17 test methods                             18 test methods</pre>
+  <p>Every other path is byte-identical, including the files the fleet owns and rewrites
+  (<code>ACCEPTANCE.md</code>, <code>INTENT.md</code>, <code>contracts/C-V02.md</code>,
+  <code>harness/</code>). The single difference is
+  <code>test_brownfield_baseline_is_adopted_without_clobbering</code> - the regression test for the
+  very capability this run depended on. It is present in the repository and absent from the tree
+  the run adopted.</p>
+  <h3>Consequences, stated honestly</h3>
+  <ul>
+    <li>The run's "regression floor" was one test weaker than the repository's real suite. Nothing
+    broke - the full suite passes on the landed tree - but the claim to have preserved existing
+    behaviour was enforced against an incomplete copy of it.</li>
+    <li><code>baseline_from</code> read the <strong>working copy</strong>, not a revision. A working
+    copy can be dirty, half-written, or shared with another process; on this machine it evidently
+    was, and the fleet adopted the drift silently because nothing recorded which revision it had
+    adopted.</li>
+  </ul>
+  <p>The fix is not to trust the working copy more carefully, it is to stop treating a working copy
+  as the baseline at all: <code>adopt_baseline()</code> now materialises <code>HEAD</code> through
+  <code>git archive</code> when the source is a repository (falling back to the filesystem only for
+  a plain directory), records <code>{mode, source, revision, dirty, files}</code> in
+  <code>baseline.json</code> and in a <code>baseline.adopted</code> ledger event, and refuses to
+  hide the day the working copy diverges.
+  <code>WorktreeTests.test_brownfield_adoption_pins_a_revision_instead_of_the_working_copy</code>
+  reproduces the original failure: a committed <code>app.py</code>, a dirty edit to it, and an
+  untracked scratch file - the adopted tree is the revision, not the disk.</p>
+
+  <h2>What is still not proven</h2>
+  <ul>
+    <li>The v0.2 run itself was not repeated on the fixed adoption path. The fix changes how a
+    baseline is <em>chosen</em>, not how tasks are built, so it was verified by its own test, by the
+    full engine suite, and by a fresh brownfield <code>plan</code> against this repository, which now
+    adopts revision <code>ab7ff45</code> and says so.</li>
+    <li>The dirty working copy that caused the drift was never identified. The audit narrows it to
+    "something modified <code>tests/test_engine.py</code> in the shared checkout between the
+    brownfield commit and the run's planning step" and stops there rather than guessing.</li>
+    <li><code>deploy</code> supervision is local-process supervision. It proves the artefact starts,
+    answers and stops; it says nothing about a container runtime, a scheduler, or a cloud
+    provider.</li>
+  </ul>
+</main>
+<footer>Post-run audit by the fleet operator - <a style="color:#9fe3c6" href="AUDIT.md">AUDIT.md</a> - the run's own evidence is unchanged.</footer>
+</body></html>
