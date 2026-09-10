@@ -1,0 +1,17 @@
+{
+  "cmd": "python3 -m unittest harness.test_analytics -v",
+  "evidence": {
+    "artifacts": [],
+    "detail": "exit=0 (expected [0])",
+    "duration_s": 0.3862905502319336,
+    "exit_code": 0,
+    "gate_id": "G-analytics",
+    "metrics": {},
+    "output_tail": "\ntest_bad_limits_are_rejected (harness.test_analytics.AnalyticsTest.test_bad_limits_are_rejected) ... ok\ntest_limit_is_respected (harness.test_analytics.AnalyticsTest.test_limit_is_respected) ... ok\ntest_repeated_calls_are_stable (harness.test_analytics.AnalyticsTest.test_repeated_calls_are_stable) ... ok\ntest_ties_are_broken_by_creation_time (harness.test_analytics.AnalyticsTest.test_ties_are_broken_by_creation_time) ... ok\ntest_top_links_are_ordered_by_clicks (harness.test_analytics.AnalyticsTest.test_top_links_are_ordered_by_clicks) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.281s\n\nOK\n",
+    "recorded_at": 1789039863.0217283,
+    "status": "pass",
+    "task_id": ""
+  },
+  "gate": "G-analytics",
+  "title": "top-links contract conformance"
+}

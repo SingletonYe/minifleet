@@ -1,0 +1,27 @@
+{
+  "from_intent": "linksvc",
+  "to_intent": "linksvc-v2",
+  "added_components": [
+    "analytics"
+  ],
+  "removed_components": [],
+  "changed_components": [
+    "http"
+  ],
+  "new_tasks": [
+    "T-analytics"
+  ],
+  "reopened_tasks": [
+    "T-http"
+  ],
+  "regression_suite": [
+    "G-acceptance",
+    "G-concurrency",
+    "G-durability",
+    "G-perf",
+    "G-budget-p99",
+    "G-budget-rps",
+    "G-analytics",
+    "G-layout"
+  ]
+}

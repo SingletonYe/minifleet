@@ -12,6 +12,7 @@
 | A-8 | nfr | Redirect latency stays at or below 75 ms at p99 | G-budget-p99 |
 | A-9 | nfr | The redirect path sustains at least 200 requests per second | G-budget-rps |
 | A-10 | operability | The service starts as `python3 -m linksvc` and prints a machine-readable ready line with its port | G-layout |
+| A-11 | functional | GET /links/top?limit=N returns the most-clicked links ordered by clicks (ties broken by creation time), defaults to 10 and rejects a limit outside 1..100 with 400 | G-analytics |
 
 ## Non-functional budgets
 
@@ -31,4 +32,5 @@
 | G-perf | cmd | system | `python3 -m harness.perf_probe` |
 | G-budget-p99 | budget | system | `` |
 | G-budget-rps | budget | system | `` |
+| G-analytics | cmd | system | `python3 -m unittest harness.test_analytics -v` |
 | G-layout | files | system | `linksvc/__main__.py,linksvc/storage.py,linksvc/ratelimit.py,linksvc/server.py,README.md,ACCEPTANCE.md` |

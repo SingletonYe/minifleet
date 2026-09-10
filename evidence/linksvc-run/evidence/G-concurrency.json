@@ -3,12 +3,12 @@
   "evidence": {
     "artifacts": [],
     "detail": "exit=0 (expected [0])",
-    "duration_s": 0.5273318290710449,
+    "duration_s": 0.5326290130615234,
     "exit_code": 0,
     "gate_id": "G-concurrency",
     "metrics": {},
-    "output_tail": "\ntest_no_lost_clicks (harness.test_concurrency.ConcurrencyTest.test_no_lost_clicks) ... /usr/lib/python3.12/subprocess.py:1127: ResourceWarning: subprocess 7633 is still running\n  _warn(\"subprocess %s is still running\" % self.pid,\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=7 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\n\n----------------------------------------------------------------------\nRan 1 test in 0.460s\n\nOK\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=3 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='UTF-8'>\n",
-    "recorded_at": 1789039661.7534425,
+    "output_tail": "\ntest_no_lost_clicks (harness.test_concurrency.ConcurrencyTest.test_no_lost_clicks) ... /usr/lib/python3.12/subprocess.py:1127: ResourceWarning: subprocess 11146 is still running\n  _warn(\"subprocess %s is still running\" % self.pid,\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=7 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\n\n----------------------------------------------------------------------\nRan 1 test in 0.453s\n\nOK\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=3 encoding='UTF-8'>\nsys:1: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='UTF-8'>\n",
+    "recorded_at": 1789039861.0177913,
     "status": "pass",
     "task_id": ""
   },

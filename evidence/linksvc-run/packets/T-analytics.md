@@ -1,18 +1,15 @@
-# Task packet T-http - HTTP surface
+# Task packet T-analytics - Click analytics
 
-Run: `20260910T112549Z-linksvc-c18a27`   Role: **builder**   Branch: `task/http-a2`
+Run: `20260910T112549Z-linksvc-c18a27`   Role: **builder**   Branch: `task/analytics`
 
 ## Goal
 
-Implement linksvc/__main__.py, linksvc/api.py, linksvc/server.py and linksvc/__init__.py: the HTTP API, routing, validation, ready line, logging and graceful shutdown. It also serves GET /links/top through linksvc.analytics.
+Implement linksvc/analytics.py: aggregate clicks over the link store and return the most-clicked links with a bounded limit.
 
 ## Write scope (may not be exceeded)
 
-- `linksvc/__init__.py`
-- `linksvc/api.py`
-- `linksvc/server.py`
-- `linksvc/__main__.py`
-- `tests/test_api.py`
+- `linksvc/analytics.py`
+- `tests/test_analytics.py`
 
 Any file outside this scope is owned by another worker. Touching it will fail the fleet's ownership check at integration time.
 
@@ -32,23 +29,16 @@ Frozen module boundaries. Workers implement these exactly; they may not renegoti
 
 ## Definition of done
 
-- every route in the contract answers with the specified status code and body
-- the process prints the MINIFLEET_READY line with the bound port
-- SIGTERM drains and exits 0
-- each request emits one JSON log line on stderr
-- GET /links/top validates its limit and serialises the analytics page
+- top_links returns links ordered by clicks descending, ties broken by created_at ascending
+- an out-of-range or non-integer limit raises InvalidLimit rather than returning a wrong page
+- the aggregate runs as SQL, not by walking every link in Python
 
 ## Tests you must write and run
 
-- an in-process test that starts the server on port 0 and drives the full API
+- unit tests for ordering, ties, limits and an empty store
 
 ## Acceptance criteria this task feeds
 
-- **A-1** (functional): POST /links creates a link, supports a custom alias and an idempotency key, and rejects invalid input with 400 / 409
-- **A-2** (functional): GET /{code} answers 302 with the original URL, 404 for unknown codes and 410 for expired links
-- **A-4** (functional): GET /links/{code}/stats reports an exact click count and /metrics exposes the service counters
-- **A-7** (operability): SIGTERM produces a clean shutdown with exit status 0
-- **A-10** (operability): The service starts as `python3 -m linksvc` and prints a machine-readable ready line with its port
 - **A-11** (functional): GET /links/top?limit=N returns the most-clicked links ordered by clicks (ties broken by creation time), defaults to 10 and rejects a limit outside 1..100 with 400
 
 ## System budgets (enforced later, by the fleet)
@@ -61,7 +51,7 @@ Frozen module boundaries. Workers implement these exactly; they may not renegoti
 Work only inside the worktree above. When finished, report a JSON object with:
 
 ```json
-{"task_id": "T-http", "status": "submitted|failed", "files": ["..."], "commands": ["..."], "notes": "what you did and what you did not do"}
+{"task_id": "T-analytics", "status": "submitted|failed", "files": ["..."], "commands": ["..."], "notes": "what you did and what you did not do"}
 ```
 
 Report honestly: a task that is partly done and says so is more useful to the fleet than one that claims success. The fleet verifies every claim itself.

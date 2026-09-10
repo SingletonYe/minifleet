@@ -94,6 +94,11 @@ class Scheduler:
         out: list[tuple[Task, Packet, Path]] = []
         for task in tasks:
             worktree_path = (self.run_dir / "worktrees" / task.component_id).resolve()
+            # A reopened task must start from the current baseline: its old
+            # branch is already merged, and the baseline may carry contracts and
+            # harness files frozen after that merge. Reusing the merged branch
+            # would silently hand the worker a stale tree.
+            task.branch = self.repo.attempt_branch(task.component_id, task.branch, base)
             self.repo.add_worktree(worktree_path, task.branch, base)
             task.worktree = str(worktree_path)
             packet = build_packet(

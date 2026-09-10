@@ -12,8 +12,9 @@ import json
 import time
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
+from .analytics import DEFAULT_LIMIT, InvalidLimit, top_links
 from .ratelimit import TokenBucketLimiter
 from .storage import (
     DuplicateAlias,
@@ -74,6 +75,7 @@ class Api:
         remote: str = "",
     ) -> tuple[int, dict[str, str], bytes]:
         headers = {k.lower(): v for k, v in (headers or {}).items()}
+        self.state.counters.requests += 1
         if method not in ALLOWED_METHODS:
             return self._json(405, {"error": "method not allowed"}, {"allow": ", ".join(ALLOWED_METHODS)})
         try:
@@ -94,8 +96,12 @@ class Api:
         headers: dict[str, str],
         remote: str,
     ) -> tuple[int, dict[str, str], bytes]:
-        route = urlparse(path).path
+        parsed = urlparse(path)
+        route = parsed.path
         segments = [unquote(part) for part in route.split("/") if part != ""]
+
+        if segments == ["links", "top"] and method in ("GET", "HEAD"):
+            return self._top(parse_qs(parsed.query))
 
         if len(segments) == 1:
             if segments[0] == "healthz" and method in ("GET", "HEAD"):
@@ -190,6 +196,33 @@ class Api:
             },
         )
 
+    def _top(self, query: dict[str, list[str]]) -> tuple[int, dict[str, str], bytes]:
+        # The route is reserved: /links/top is the analytics page, never a code.
+        # Redirects use the single-segment form (/{code}), so the two cannot
+        # collide.
+        raw = query.get("limit", [str(DEFAULT_LIMIT)])[0]
+        try:
+            limit = _parse_limit(raw)
+            page = top_links(self.state.store, limit)
+        except InvalidLimit as exc:
+            self.state.counters.bad_request += 1
+            return self._json(400, {"error": str(exc)})
+        return self._json(
+            200,
+            {
+                "limit": limit,
+                "top": [
+                    {
+                        "code": row.code,
+                        "url": row.url,
+                        "clicks": row.clicks,
+                        "created_at": row.created_at,
+                    }
+                    for row in page
+                ],
+            },
+        )
+
     # -- helpers ---------------------------------------------------------
     def _uptime(self) -> float:
         return time.time() - self.state.started_at
@@ -231,3 +264,12 @@ class Api:
         headers = {"content-type": "application/json", "content-length": str(len(body))}
         headers.update(extra or {})
         return status, headers, body
+
+
+def _parse_limit(raw: str) -> int:
+    """Accept only what an operator would type: a base-10 integer."""
+
+    text = raw.strip()
+    if not text or not text.isdigit():
+        raise InvalidLimit("limit must be an integer between 1 and 100")
+    return int(text)

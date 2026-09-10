@@ -105,11 +105,55 @@ class Repo:
     def checkout(self, branch: str) -> None:
         git(["checkout", "-q", branch], self.path)
 
+    def branch_exists(self, branch: str) -> bool:
+        return git(["rev-parse", "--verify", "-q", branch], self.path, check=False).returncode == 0
+
+    def is_ancestor(self, ancestor: str, descendant: str) -> bool:
+        """True when ``ancestor`` is already contained in ``descendant``."""
+
+        proc = git(
+            ["merge-base", "--is-ancestor", ancestor, descendant], self.path, check=False
+        )
+        return proc.returncode == 0
+
+    def attempt_branch(self, component_id: str, current: str, base: str) -> str:
+        """Pick the branch a new attempt should use.
+
+        A branch whose tip is already contained in the baseline has been
+        merged; checking it out again would hand the worker a tree from before
+        the merge (missing contracts and harness files frozen since). Such a
+        branch is spent, so the attempt gets a fresh branch from the baseline.
+        An unmerged branch is live work and is reused.
+        """
+
+        if not self.branch_exists(current):
+            return current
+        if not self.is_ancestor(current, base):
+            return current
+        attempt = 2
+        while self.branch_exists(f"task/{component_id}-a{attempt}"):
+            attempt += 1
+        return f"task/{component_id}-a{attempt}"
+
     # -- worker sandboxes ------------------------------------------------
     def add_worktree(self, path: Path | str, branch: str, base: str = "HEAD") -> Path:
         path = Path(path).resolve()
         if (path / ".git").exists():
-            return path
+            current = git(
+                ["rev-parse", "--abbrev-ref", "HEAD"], path, check=False
+            ).stdout.strip()
+            if current == branch:
+                return path
+            # The sandbox exists but is checked out on another branch: it is a
+            # leftover from an earlier attempt and must not be reused.
+            self.remove_worktree(path)
+        elif path.exists():
+            for child in sorted(path.rglob("*"), reverse=True):
+                if child.is_dir() and not child.is_symlink():
+                    child.rmdir()
+                else:
+                    child.unlink()
+            path.rmdir()
         path.parent.mkdir(parents=True, exist_ok=True)
         exists = git(["rev-parse", "--verify", "-q", branch], self.path, check=False)
         if exists.returncode == 0:

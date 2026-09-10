@@ -109,10 +109,27 @@ The run is worth reading for the two failures in it, because they are the point:
    `clicks == 1` before the new clicks and `clicks == 2` after them. Both verdicts are
    still in the ledger - a corrected harness does not erase the failure it caused.
 
-The post-fix numbers, from `evidence/linksvc-run/report.md`: 320/320 clicks counted under
+The final numbers, from `evidence/linksvc-run/report.md`: 320/320 clicks counted under
 8 parallel writers, 40/40 links and the click counter intact after `SIGKILL`, `SIGTERM`
-exit status 0, redirect p99 `30.6 ms` against a `75 ms` budget, and `896 req/s` against a
+exit status 0, redirect p99 `29.9 ms` against a `75 ms` budget, and `928 req/s` against a
 `200 req/s` budget.
+
+## The follow-up wave (evolution)
+
+After the system was admitted, a second intent (`intents/linksvc-v2.json`) asked for
+something new: `GET /links/top?limit=N`, the most-clicked links. `minifleet evolve` diffed
+the intent, reported one added component and one changed component, and reopened exactly
+that work - `T-analytics` and `T-http` - while leaving the two verified tasks merged. The
+ten original criteria stayed in the run as the regression suite, and the new criterion
+`A-11` got its own frozen harness (`intents/harness-linksvc/test_analytics.py`) written
+before the analytics worker was dispatched. `evidence/linksvc-run/evolution.json` is the
+delta that was computed.
+
+That wave found a third defect, this time in the engine. Dispatching a *reopened* task
+reused its old branch, so the worker was handed a tree from before the merge - without
+the contracts and harness files frozen since. `worktree.attempt_branch` now detects a
+branch that is already contained in the baseline and starts a fresh attempt branch from
+the current baseline instead; `tests/test_engine.py` pins the behaviour.
 
 ## Repository layout
 

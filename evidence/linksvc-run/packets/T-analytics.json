@@ -89,7 +89,7 @@
       "statement": "GET /links/top?limit=N returns the most-clicked links ordered by clicks (ties broken by creation time), defaults to 10 and rejects a limit outside 1..100 with 400"
     }
   ],
-  "base_commit": "845c3b64f5c30f6ad38d373f6cd6329f67ea1354",
+  "base_commit": "782bf729801a5e3ac1473f48cdd5545bea72f2f7",
   "budgets": {
     "redirect_p99_ms": 75.0,
     "redirect_rps": 200.0
@@ -116,55 +116,43 @@
   "run_id": "20260910T112549Z-linksvc-c18a27",
   "task": {
     "acceptance_ids": [
-      "A-1",
-      "A-10",
-      "A-11",
-      "A-2",
-      "A-4",
-      "A-7"
+      "A-11"
     ],
     "attempts": 0,
-    "branch": "task/http-a2",
-    "component_id": "http",
+    "branch": "task/analytics",
+    "component_id": "analytics",
     "contract_ids": [
       "C-INTERFACES"
     ],
     "depends_on": [
-      "T-analytics",
-      "T-ratelimit",
       "T-storage"
     ],
     "done_when": [
-      "every route in the contract answers with the specified status code and body",
-      "the process prints the MINIFLEET_READY line with the bound port",
-      "SIGTERM drains and exits 0",
-      "each request emits one JSON log line on stderr",
-      "GET /links/top validates its limit and serialises the analytics page"
+      "top_links returns links ordered by clicks descending, ties broken by created_at ascending",
+      "an out-of-range or non-integer limit raises InvalidLimit rather than returning a wrong page",
+      "the aggregate runs as SQL, not by walking every link in Python"
     ],
     "evidence": [],
     "finished_at": null,
     "gate_ids": [
       "G-unit"
     ],
-    "goal": "Implement linksvc/__main__.py, linksvc/api.py, linksvc/server.py and linksvc/__init__.py: the HTTP API, routing, validation, ready line, logging and graceful shutdown. It also serves GET /links/top through linksvc.analytics.",
-    "id": "T-http",
+    "goal": "Implement linksvc/analytics.py: aggregate clicks over the link store and return the most-clicked links with a bounded limit.",
+    "id": "T-analytics",
     "notes": "",
     "owns": [
-      "linksvc/__init__.py",
-      "linksvc/api.py",
-      "linksvc/server.py",
-      "linksvc/__main__.py",
-      "tests/test_api.py"
+      "linksvc/analytics.py",
+      "tests/test_analytics.py"
     ],
     "role": "builder",
-    "started_at": 1789039780.6734653,
+    "started_at": null,
     "state": "ready",
     "submitted_files": [],
     "tests": [
-      "an in-process test that starts the server on port 0 and drives the full API"
+      "unit tests for ordering, ties, limits and an empty store"
     ],
-    "title": "HTTP surface",
-    "worktree": "/home/user/workspace/minifleet/runs/20260910T112549Z-linksvc-c18a27/worktrees/http"
+    "title": "Click analytics",
+    "worktree": "/home/user/workspace/minifleet/runs/20260910T112549Z-linksvc-c18a27/worktrees/analytics"
   },
-  "worktree": "/home/user/workspace/minifleet/runs/20260910T112549Z-linksvc-c18a27/worktrees/http"
+  "worktree": "/home/user/workspace/minifleet/runs/20260910T112549Z-linksvc-c18a27/worktrees/analytics"
 }

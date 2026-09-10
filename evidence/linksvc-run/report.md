@@ -1,7 +1,7 @@
-# Fleet run report - A production-grade link shortener
+# Fleet run report - A production-grade link shortener, v2: top links
 
 - Run id: `20260910T112549Z-linksvc-c18a27`
-- Intent: `linksvc`
+- Intent: `linksvc-v2`
 - Dispatcher: `packet`
 - Status: **passed**
 - Verdict: pass: all required gates green
@@ -17,13 +17,14 @@ Build a link shortener that a real team could put behind traffic: short links wi
 - linksvc/server.py + linksvc/api.py - HTTP surface on ThreadingHTTPServer with graceful shutdown
 - tests/ - unit tests written by each worker for its own module
 - README.md and ACCEPTANCE.md - how to run it and what was proven
+- linksvc/analytics.py - click aggregation over the store, backing GET /links/top
 
 ## Design
 
-- Components: 3
+- Components: 4
 - Contracts: 1
-- Tasks: 3
-- Gates: 8
+- Tasks: 4
+- Gates: 9
 
 ## Task graph
 
@@ -31,7 +32,8 @@ Build a link shortener that a real team could put behind traffic: short links wi
 | --- | --- | --- | --- | --- | --- |
 | `T-storage` Durable link store | builder | - | 2 path(s) | merged | 2 |
 | `T-ratelimit` Token bucket limiter | builder | - | 2 path(s) | merged | 2 |
-| `T-http` HTTP surface | builder | T-storage, T-ratelimit | 5 path(s) | merged | 5 |
+| `T-analytics` Click analytics | builder | T-storage | 2 path(s) | merged | 2 |
+| `T-http` HTTP surface | builder | T-analytics, T-ratelimit, T-storage | 5 path(s) | merged | 2 |
 
 ## Traceability: intent to evidence
 
@@ -44,9 +46,10 @@ Build a link shortener that a real team could put behind traffic: short links wi
 | A-5 | verified | Parallel redirects never lose a click: 8 threads x 40 redirects must l | `G-concurrency` | pass | exit=0 (expected [0]) |
 | A-6 | verified | A SIGKILL during operation loses no link and no click counter after re | `G-durability` | pass | exit=0 (expected [0]) |
 | A-7 | verified | SIGTERM produces a clean shutdown with exit status 0 | `G-durability` | pass | exit=0 (expected [0]) |
-| A-8 | verified | Redirect latency stays at or below 75 ms at p99 | `G-budget-p99` | pass | redirect_p99_ms=30.641 <= 75 -> ok |
-| A-9 | verified | The redirect path sustains at least 200 requests per second | `G-budget-rps` | pass | redirect_rps=896.485 >= 200 -> ok |
+| A-8 | verified | Redirect latency stays at or below 75 ms at p99 | `G-budget-p99` | pass | redirect_p99_ms=29.889 <= 75 -> ok |
+| A-9 | verified | The redirect path sustains at least 200 requests per second | `G-budget-rps` | pass | redirect_rps=927.766 >= 200 -> ok |
 | A-10 | verified | The service starts as `python3 -m linksvc` and prints a machine-readab | `G-layout` | pass | all paths satisfied: ['linksvc/__main__.py', 'linksvc/storage.py', 'linksvc/ratelimit.py', 'linksvc/server.py', 'README. |
+| A-11 | verified | GET /links/top?limit=N returns the most-clicked links ordered by click | `G-analytics` | pass | exit=0 (expected [0]) |
 
 ## Gate ledger
 
@@ -69,6 +72,16 @@ Build a link shortener that a real team could put behind traffic: short links wi
 | `G-layout` | pass | 0.00s |  | all paths satisfied: ['linksvc/__main__.py', 'linksvc/storage.py', 'linksvc/ratelimit.py', 'linksvc/server.py', 'README.md', 'ACCEPTANCE.md' |
 | `G-budget-p99` | pass | 0.00s | {"redirect_p99_ms": 30.641} | redirect_p99_ms=30.641 <= 75 -> ok |
 | `G-budget-rps` | pass | 0.00s | {"redirect_rps": 896.485} | redirect_rps=896.485 >= 200 -> ok |
+| `G-unit` | pass | 1.88s |  | exit=0 (expected [0]) |
+| `G-unit` | pass | 1.92s |  | exit=0 (expected [0]) |
+| `G-acceptance` | pass | 1.63s |  | exit=0 (expected [0]) |
+| `G-concurrency` | pass | 0.53s |  | exit=0 (expected [0]) |
+| `G-durability` | pass | 0.55s |  | exit=0 (expected [0]) |
+| `G-perf` | pass | 1.06s | {"redirect_p50_ms": 5.485, "redirect_p95_ms": 11.717, "redirect_p99_ms": 29.889, "redirect_rps": 927.766, "redirect_samples": 600.0} | exit=0 (expected [0]) |
+| `G-analytics` | pass | 0.39s |  | exit=0 (expected [0]) |
+| `G-layout` | pass | 0.00s |  | all paths satisfied: ['linksvc/__main__.py', 'linksvc/storage.py', 'linksvc/ratelimit.py', 'linksvc/server.py', 'README.md', 'ACCEPTANCE.md' |
+| `G-budget-p99` | pass | 0.00s | {"redirect_p99_ms": 29.889} | redirect_p99_ms=29.889 <= 75 -> ok |
+| `G-budget-rps` | pass | 0.00s | {"redirect_rps": 927.766} | redirect_rps=927.766 >= 200 -> ok |
 
 ## Not proven
 
@@ -76,6 +89,7 @@ Build a link shortener that a real team could put behind traffic: short links wi
 
 ## Risks carried forward
 
+- wide task graph: integration cost grows with the number of writers
 - non-functional criteria are only as trustworthy as the measurement harness
 
 ## Decisions taken by the architect

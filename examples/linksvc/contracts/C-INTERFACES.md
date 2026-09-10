@@ -10,6 +10,7 @@ Frozen module boundaries. Workers implement these exactly; they may not renegoti
 - `linksvc.storage.errors`: InvalidUrl, InvalidAlias, DuplicateAlias (all subclasses of StorageError)
 - `linksvc.ratelimit.TokenBucketLimiter`: TokenBucketLimiter(rate: float, burst: int) with allow(key: str) -> tuple[bool, float] returning (allowed, retry_after_seconds)
 - `linksvc.server.serve`: serve(host: str, port: int, db_path: str, rate: float, burst: int) -> int
+- `linksvc.analytics.top_links`: top_links(store: LinkStore, limit: int = 10) -> list[LinkStats] ordered by clicks desc, then created_at asc
 
 ## Content
 
@@ -33,3 +34,5 @@ Frozen module boundaries. Workers implement these exactly; they may not renegoti
 - Click counting must be a single atomic `UPDATE ... SET clicks = clicks + 1`.
 - `idempotency_key` is unique per key: a repeat returns the existing link instead of creating a second one.
 - Expiry is enforced at read time (`expires_at` in the past reads as expired).
+- `GET /links/top?limit=N` -> 200 `{limit, top: [{code, url, clicks, created_at}, ...]}`; `limit` defaults to 10 and must be an integer in 1..100, otherwise 400.
+

@@ -3,18 +3,18 @@
   "evidence": {
     "artifacts": [],
     "detail": "exit=0 (expected [0])",
-    "duration_s": 1.0895826816558838,
+    "duration_s": 1.0640757083892822,
     "exit_code": 0,
     "gate_id": "G-perf",
     "metrics": {
-      "redirect_p50_ms": 5.202,
-      "redirect_p95_ms": 13.275,
-      "redirect_p99_ms": 30.641,
-      "redirect_rps": 896.485,
+      "redirect_p50_ms": 5.485,
+      "redirect_p95_ms": 11.717,
+      "redirect_p99_ms": 29.889,
+      "redirect_rps": 927.766,
       "redirect_samples": 600.0
     },
-    "output_tail": "MINIFLEET_METRIC {\"name\": \"redirect_p50_ms\", \"value\": 5.202}\nMINIFLEET_METRIC {\"name\": \"redirect_p95_ms\", \"value\": 13.275}\nMINIFLEET_METRIC {\"name\": \"redirect_p99_ms\", \"value\": 30.641}\nMINIFLEET_METRIC {\"name\": \"redirect_rps\", \"value\": 896.485}\nMINIFLEET_METRIC {\"name\": \"redirect_samples\", \"value\": 600.0}\nmedian=5.194ms p99=30.641ms rps=896.5\n",
-    "recorded_at": 1789039663.4454777,
+    "output_tail": "MINIFLEET_METRIC {\"name\": \"redirect_p50_ms\", \"value\": 5.485}\nMINIFLEET_METRIC {\"name\": \"redirect_p95_ms\", \"value\": 11.717}\nMINIFLEET_METRIC {\"name\": \"redirect_p99_ms\", \"value\": 29.889}\nMINIFLEET_METRIC {\"name\": \"redirect_rps\", \"value\": 927.766}\nMINIFLEET_METRIC {\"name\": \"redirect_samples\", \"value\": 600.0}\nmedian=5.475ms p99=29.889ms rps=927.8\n",
+    "recorded_at": 1789039862.6350985,
     "status": "pass",
     "task_id": ""
   },

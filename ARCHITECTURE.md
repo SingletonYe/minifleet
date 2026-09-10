@@ -41,6 +41,13 @@ Parallelism is safe only because two invariants hold before any worker starts:
   (a worker whose commit touches a path outside its scope fails immediately) and before
   merge (overlapping branches abort integration).
 
+Reopening work is the third case the scheduler has to get right, because an evolved intent
+reopens tasks whose branch has already been merged. A merged branch is *spent*: checking it
+out again would hand the worker the tree from before the merge, without the contracts and
+harness files frozen since. `worktree.attempt_branch` therefore starts a fresh attempt
+branch from the current baseline whenever the task's previous branch is already an ancestor
+of it, and reuses the existing branch only when it holds unmerged work.
+
 The scheduler runs a wave of ready tasks concurrently, then integrates and promotes the
 next wave. Task gates run inside the worker's own worktree, so a broken module never
 reaches the integration branch; system gates run on the integrated tree, which also

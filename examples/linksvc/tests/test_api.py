@@ -125,6 +125,30 @@ class ApiTests(unittest.TestCase):
         status, _, _ = self.service.json("GET", "/links/missing/stats")
         self.assertEqual(status, 404)
 
+    def test_top_links_are_ordered_by_clicks(self):
+        busy = self.create("https://example.com/top/busy")
+        quiet = self.create("https://example.com/top/quiet")
+        for _ in range(6):
+            self.service.request("GET", f"/{busy['code']}")
+        for _ in range(5):
+            self.service.request("GET", f"/{quiet['code']}")
+
+        status, payload, _ = self.service.json("GET", "/links/top?limit=2")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["limit"], 2)
+        codes = [row["code"] for row in payload["top"]]
+        self.assertEqual(codes, [busy["code"], quiet["code"]])
+        self.assertEqual(payload["top"][0]["clicks"], 6)
+        self.assertIn("url", payload["top"][0])
+
+    def test_top_defaults_to_ten_and_rejects_bad_limits(self):
+        status, payload, _ = self.service.json("GET", "/links/top")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["limit"], 10)
+        for query in ("?limit=0", "?limit=101", "?limit=abc", "?limit=1.5", "?limit=-2"):
+            status, body, _ = self.service.json("GET", f"/links/top{query}")
+            self.assertEqual(status, 400, f"{query} must be rejected, got {body}")
+
     def test_unsupported_methods_and_paths(self):
         status, headers, _ = self.service.request("DELETE", "/links")
         self.assertEqual(status, 405)

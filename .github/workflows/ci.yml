@@ -38,6 +38,7 @@ jobs:
         working-directory: examples/linksvc
         run: |
           python -m unittest harness.test_accept -v
+          python -m unittest harness.test_analytics -v
           python -m unittest harness.test_concurrency -v
           python -m unittest harness.test_durability -v
       - name: Non-functional budgets

@@ -16,3 +16,17 @@
 {"branch": "task/http", "event": "task.merged", "t": 1789039636.7489858, "task": "T-http"}
 {"event": "system.verified", "gates": {"G-acceptance": "pass", "G-budget-p99": "pass", "G-budget-rps": "pass", "G-concurrency": "pass", "G-durability": "fail", "G-layout": "pass", "G-perf": "pass"}, "t": 1789039643.0676887, "verdict": "fail: G-durability=fail"}
 {"event": "system.verified", "gates": {"G-acceptance": "pass", "G-budget-p99": "pass", "G-budget-rps": "pass", "G-concurrency": "pass", "G-durability": "pass", "G-layout": "pass", "G-perf": "pass"}, "t": 1789039663.4490597, "verdict": "pass: all required gates green"}
+{"event": "tasks.ready", "t": 1789039755.1277285, "tasks": ["T-analytics"]}
+{"added_components": ["analytics"], "changed_components": ["http"], "event": "evolve.planned", "from_intent": "linksvc", "new_tasks": ["T-analytics"], "removed_components": [], "reopened_tasks": ["T-http"], "t": 1789039755.1322463, "to_intent": "linksvc-v2"}
+{"dispatcher": "packet", "event": "tasks.dispatched", "t": 1789039757.5596623, "tasks": ["T-analytics"]}
+{"commit": "2ec2cb918b741adf7083c8600271f437d74a7ba9", "event": "task.submitted", "files": ["linksvc/analytics.py", "tests/test_analytics.py"], "notes": "packet executed in worktree branched from the integration head", "t": 1789039776.6495707, "task": "T-analytics", "worker": "external-runtime"}
+{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789039778.5343158, "task": "T-analytics"}
+{"branch": "task/analytics", "event": "task.merged", "t": 1789039778.6505613, "task": "T-analytics"}
+{"event": "tasks.ready", "t": 1789039778.6507113, "tasks": ["T-http"]}
+{"dispatcher": "packet", "event": "tasks.dispatched", "t": 1789039780.6753983, "tasks": ["T-http"]}
+{"dispatcher": "packet", "event": "tasks.dispatched", "t": 1789039793.4714434, "tasks": ["T-http"]}
+{"dispatcher": "packet", "event": "tasks.dispatched", "t": 1789039824.0857618, "tasks": ["T-http"]}
+{"commit": "69e1760eaa89a20b38cc9978c33eef2e0f458e6d", "event": "task.submitted", "files": ["linksvc/api.py", "tests/test_api.py"], "notes": "second attempt: /links/top routed through linksvc.analytics", "t": 1789039854.1664224, "task": "T-http", "worker": "external-runtime"}
+{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789039856.0973907, "task": "T-http"}
+{"branch": "task/http-a2", "event": "task.merged", "t": 1789039856.2335217, "task": "T-http"}
+{"event": "system.verified", "gates": {"G-acceptance": "pass", "G-analytics": "pass", "G-budget-p99": "pass", "G-budget-rps": "pass", "G-concurrency": "pass", "G-durability": "pass", "G-layout": "pass", "G-perf": "pass"}, "t": 1789039863.026023, "verdict": "pass: all required gates green"}

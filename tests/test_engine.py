@@ -279,6 +279,56 @@ class EndToEndTests(unittest.TestCase):
             self.assertIn("outside its scope", outcome["detail"])
             self.assertEqual(task.state, TaskState.FAILED.value)
 
+    def test_reopened_task_starts_from_the_current_baseline(self):
+        """A second attempt must not be handed the tree from the first attempt.
+
+        The harness and the contracts are frozen *after* the previous merge, so
+        reusing the merged branch would give the worker a stale checkout. This
+        covers the `evolve` path: the task is reopened, a new frozen file lands
+        on the integration branch, and the new worktree must contain it.
+        """
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            intent_path = root / "intent.json"
+            intent_path.write_text(json.dumps(_intent()))
+            spec = intent_mod.load(intent_path)
+            run, run_dir = ledger.create(root / "runs", spec, "fake")
+            design = architect.design(spec)
+            run.set_design(design)
+            scheduler = Scheduler(run, run_dir, spec, design)
+
+            from minifleet.cli import baseline_files
+
+            scheduler.repo.init(baseline_files(spec, design))
+            scheduler.repo.ensure_branch(run.integration_branch)
+            scheduler.refresh()
+            scheduler.dispatch(FakeDispatcher({"T-calc": MODULE_FILES}))
+            self.assertEqual(scheduler.ingest("T-calc", worker="fake")["status"], "verified")
+            self.assertEqual(scheduler.integrate()["status"], "ok")
+
+            first_branch = scheduler.task("T-calc").branch
+            self.assertTrue(scheduler.repo.branch_exists(first_branch))
+
+            # The verification layer freezes a new contract after the merge.
+            (Path(run.repo_dir) / "NEW-CONTRACT.md").write_text("frozen after wave 1\n")
+            scheduler.repo.commit_all(run.repo_dir, "verification: freeze a follow-up contract")
+
+            # `evolve` reopens the same component.
+            task = scheduler.task("T-calc")
+            task.state = TaskState.PENDING.value
+            task.worktree = None
+            scheduler.refresh()
+            prepared = scheduler.packets()
+            self.assertEqual([t.id for t, _, _ in prepared], ["T-calc"])
+
+            reopened = scheduler.task("T-calc")
+            self.assertNotEqual(reopened.branch, first_branch, "the merged branch is spent")
+            self.assertTrue(
+                (Path(reopened.worktree) / "NEW-CONTRACT.md").exists(),
+                "a reopened task must see the frozen baseline it is judged against",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

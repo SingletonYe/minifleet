@@ -3,12 +3,12 @@
   "evidence": {
     "artifacts": [],
     "detail": "exit=0 (expected [0])",
-    "duration_s": 0.6017143726348877,
+    "duration_s": 0.5525963306427002,
     "exit_code": 0,
     "gate_id": "G-durability",
     "metrics": {},
-    "output_tail": "\ntest_sigterm_shuts_down_cleanly (harness.test_durability.DurabilityTest.test_sigterm_shuts_down_cleanly) ... /usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=3 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\ntest_survives_sigkill_and_reopens_same_database (harness.test_durability.DurabilityTest.test_survives_sigkill_and_reopens_same_database) ... /usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=7 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\n\n----------------------------------------------------------------------\nRan 2 tests in 0.521s\n\nOK\n",
-    "recorded_at": 1789039662.3555272,
+    "output_tail": "\ntest_sigterm_shuts_down_cleanly (harness.test_durability.DurabilityTest.test_sigterm_shuts_down_cleanly) ... /usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=3 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\ntest_survives_sigkill_and_reopens_same_database (harness.test_durability.DurabilityTest.test_survives_sigkill_and_reopens_same_database) ... /usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n/usr/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=7 encoding='UTF-8'>\n  if method() is not None:\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nok\n\n----------------------------------------------------------------------\nRan 2 tests in 0.488s\n\nOK\n",
+    "recorded_at": 1789039861.5706666,
     "status": "pass",
     "task_id": ""
   },
