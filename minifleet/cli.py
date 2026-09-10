@@ -1,0 +1,394 @@
+"""Command line interface: the operator's view of the fleet."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
+from . import architect, intent as intent_mod, ledger, report as report_mod
+from .model import Design, IntentSpec, Run, RunStatus, TaskState
+from .scheduler import Scheduler
+from .workers import PacketDispatcher, make_dispatcher
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="minifleet", description="intent -> verified production systems")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_plan = sub.add_parser("plan", help="compile an intent and lay out the run")
+    p_plan.add_argument("--intent", required=True)
+    p_plan.add_argument("--runs-dir", default="runs")
+    p_plan.add_argument("--dispatcher", default="packet")
+
+    p_status = sub.add_parser("status", help="show run state and next actions")
+    p_status.add_argument("--run", required=True)
+
+    p_dispatch = sub.add_parser("dispatch", help="dispatch the current ready wave of tasks")
+    p_dispatch.add_argument("--run", required=True)
+    p_dispatch.add_argument("--dispatcher", default=None)
+    p_dispatch.add_argument("--limit", type=int, default=None)
+    p_dispatch.add_argument("--max-parallel", type=int, default=4)
+
+    p_ingest = sub.add_parser("ingest", help="accept a worker's output and run its task gates")
+    p_ingest.add_argument("--run", required=True)
+    p_ingest.add_argument("--task", required=True)
+    p_ingest.add_argument("--worker", default="manual")
+    p_ingest.add_argument("--notes", default="")
+
+    p_integrate = sub.add_parser("integrate", help="merge verified tasks onto the integration branch")
+    p_integrate.add_argument("--run", required=True)
+
+    p_verify = sub.add_parser("verify", help="run system gates on the integrated tree")
+    p_verify.add_argument("--run", required=True)
+
+    p_report = sub.add_parser("report", help="write the run report")
+    p_report.add_argument("--run", required=True)
+    p_report.add_argument("--no-html", action="store_true")
+
+    p_packet = sub.add_parser("packet", help="print the packet for one task")
+    p_packet.add_argument("--run", required=True)
+    p_packet.add_argument("--task", required=True)
+
+    p_run = sub.add_parser("run", help="plan, dispatch, integrate and verify in one shot")
+    p_run.add_argument("--intent", required=True)
+    p_run.add_argument("--runs-dir", default="runs")
+    p_run.add_argument("--dispatcher", default="packet")
+    p_run.add_argument("--max-parallel", type=int, default=4)
+
+    p_evolve = sub.add_parser("evolve", help="apply a new intent to a completed run")
+    p_evolve.add_argument("--run", required=True)
+    p_evolve.add_argument("--intent", required=True)
+
+    args = parser.parse_args(argv)
+    handler = {
+        "plan": cmd_plan,
+        "status": cmd_status,
+        "dispatch": cmd_dispatch,
+        "ingest": cmd_ingest,
+        "integrate": cmd_integrate,
+        "verify": cmd_verify,
+        "report": cmd_report,
+        "packet": cmd_packet,
+        "run": cmd_run,
+        "evolve": cmd_evolve,
+    }[args.command]
+    return handler(args)
+
+
+# -- commands ------------------------------------------------------------
+def cmd_plan(args: argparse.Namespace) -> int:
+    spec = intent_mod.load(args.intent)
+    raw = Path(args.intent).read_text()
+    run, run_dir = ledger.create(args.runs_dir, spec, args.dispatcher, raw_intent=_prose(raw))
+    design = architect.design(spec)
+    run.set_design(design)
+
+    scheduler = Scheduler(run, run_dir, spec, design)
+    baseline = baseline_files(spec, design)
+    baseline.update(harness_files(args.intent, spec))
+    baseline["INTENT.md"] = f"# Intent as received\n\n{_prose(raw)}\n\n```json\n{raw.strip()}\n```\n"
+    scheduler.repo.init(baseline)
+    scheduler.repo.ensure_branch(run.integration_branch)
+    scheduler.refresh()
+    scheduler.packets()
+    scheduler.persist()
+    ledger.append(run, run_dir, "plan.complete", tasks=len(design.tasks), gates=len(design.gates))
+
+    print(f"run      : {run.id}")
+    print(f"run dir  : {run_dir}")
+    print(f"tasks    : {len(design.tasks)}  gates: {len(design.gates)}  contracts: {len(design.contracts)}")
+    if design.repairs:
+        print("plan self-repairs:")
+        for item in design.repairs:
+            print(f"  - {item}")
+    print("ready    :", ", ".join(t.id for t in scheduler.ready()) or "(none)")
+    return 0
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    run, run_dir = _load(args.run)
+    design = run.design_obj
+    spec = IntentSpec.from_dict(run.intent)
+    print(ledger.summary(run))
+    print("")
+    print(f"{'task':<18}{'state':<12}{'depends':<14}{'files':<7}scope")
+    for task in design.tasks:
+        print(
+            f"{task.id:<18}{task.state:<12}{','.join(task.depends_on) or '-':<14}"
+            f"{len(task.submitted_files):<7}{','.join(task.owns)[:60]}"
+        )
+    print("")
+    print("next actions:")
+    for task in design.tasks:
+        if task.state in {TaskState.PENDING.value, TaskState.READY.value}:
+            print(f"  dispatch {task.id}: see {run_dir}/packets/{task.id}.md")
+        elif task.state == TaskState.DISPATCHED.value:
+            print(f"  ingest   {task.id}: minifleet ingest --run {run_dir} --task {task.id}")
+        elif task.state == TaskState.VERIFIED.value:
+            print(f"  merge    {task.id}: minifleet integrate --run {run_dir}")
+        elif task.state == TaskState.FAILED.value:
+            print(f"  retry    {task.id}: {task.notes or 'gates failed'}")
+    if run.verdict:
+        print("")
+        print("verdict:", run.verdict)
+    return 0
+
+
+def cmd_dispatch(args: argparse.Namespace) -> int:
+    run, run_dir = _load(args.run)
+    scheduler, spec = _scheduler(run, run_dir)
+    dispatcher = make_dispatcher(args.dispatcher or run.dispatcher)
+    results = scheduler.dispatch(dispatcher, max_parallel=args.max_parallel, limit=args.limit)
+    if not results:
+        print("nothing ready to dispatch")
+        return 0
+    for item in results:
+        print(f"{item['task_id']:<18}{item['status']:<12}{item.get('worker', '')}")
+        if item.get("notes"):
+            print(f"    {item['notes'][:160]}")
+    print("")
+    print("packets written to", run_dir / "packets")
+    if isinstance(dispatcher, PacketDispatcher):
+        print("external hand-off mode: run the packet with any agent runtime, then `minifleet ingest`")
+    return 0
+
+
+def cmd_ingest(args: argparse.Namespace) -> int:
+    run, run_dir = _load(args.run)
+    scheduler, _ = _scheduler(run, run_dir)
+    result = scheduler.ingest(args.task, worker=args.worker, notes=args.notes)
+    print(json.dumps(result, indent=2)[:4000])
+    return 0 if result["status"] == "verified" else 1
+
+
+def cmd_integrate(args: argparse.Namespace) -> int:
+    run, run_dir = _load(args.run)
+    scheduler, _ = _scheduler(run, run_dir)
+    result = scheduler.integrate()
+    print(json.dumps(result, indent=2))
+    return 0 if result.get("status") == "ok" else 1
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    run, run_dir = _load(args.run)
+    scheduler, _ = _scheduler(run, run_dir)
+    result = scheduler.verify()
+    for item in result["evidence"]:
+        metrics = json.dumps(item["metrics"]) if item["metrics"] else ""
+        print(f"{item['gate_id']:<28}{item['status']:<8}{item['duration_s']:>7.2f}s  {metrics}")
+        if item["status"] != "pass":
+            print(f"    {item['detail'][:300]}")
+    print("")
+    print(result["verdict"])
+    return 0 if run.status == RunStatus.PASSED.value else 1
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    run, run_dir = _load(args.run)
+    outputs = report_mod.write(run, run_dir, html_mode=not args.no_html)
+    for kind, path in outputs.items():
+        print(f"{kind}: {path}")
+    return 0
+
+
+def cmd_packet(args: argparse.Namespace) -> int:
+    run, run_dir = _load(args.run)
+    path = Path(run_dir) / "packets" / f"{args.task}.md"
+    if not path.exists():
+        print(f"no packet for {args.task}", file=sys.stderr)
+        return 1
+    print(path.read_text())
+    return 0
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    code = cmd_plan(args)
+    if code:
+        return code
+    runs = sorted(Path(args.runs_dir).glob("*"), key=lambda p: p.stat().st_mtime)
+    run_dir = runs[-1]
+    run = Run.load(run_dir)
+    scheduler, _ = _scheduler(run, run_dir)
+    dispatcher = make_dispatcher(args.dispatcher)
+    if isinstance(dispatcher, PacketDispatcher):
+        print("packet dispatcher does nothing by itself; use `command:<cmd>` or `http`", file=sys.stderr)
+        return 2
+    while scheduler.refresh() or scheduler.ready():
+        if not scheduler.ready():
+            break
+        scheduler.dispatch(dispatcher, max_parallel=args.max_parallel)
+        for task in list(scheduler.design.tasks):
+            if task.state == TaskState.DISPATCHED.value and _worktree_dirty(task):
+                scheduler.ingest(task.id, worker=dispatcher.name)
+        if all(t.state != TaskState.READY.value for t in scheduler.design.tasks):
+            break
+    scheduler.integrate()
+    scheduler.verify()
+    report_mod.write(run, run_dir)
+    print(f"\nfinal: {run.status}  {run.verdict}")
+    return 0 if run.status == RunStatus.PASSED.value else 1
+
+
+def cmd_evolve(args: argparse.Namespace) -> int:
+    run, run_dir = _load(args.run)
+    scheduler, spec = _scheduler(run, run_dir)
+    new_spec = intent_mod.load(args.intent)
+    plan = architect.design(new_spec)
+
+    old_ids = {t.component_id for t in scheduler.design.tasks}
+    new_ids = {c.id for c in new_spec.components}
+    added = sorted(new_ids - old_ids)
+    removed = sorted(old_ids - new_ids)
+    changed = []
+    for component in new_spec.components:
+        if component.id in old_ids:
+            old = next(c for c in scheduler.design.components if c.id == component.id)
+            if old.responsibility != component.responsibility or sorted(old.owns) != sorted(component.owns):
+                changed.append(component.id)
+
+    delta = {
+        "from_intent": run.intent_id,
+        "to_intent": new_spec.id,
+        "added_components": added,
+        "removed_components": removed,
+        "changed_components": sorted(changed),
+        "new_tasks": [t.id for t in plan.tasks if t.component_id in added],
+        "reopened_tasks": [f"T-{c}" for c in changed],
+        "regression_suite": [g.id for g in plan.gates if g.scope == "system"],
+    }
+    (Path(run_dir) / "evolution.json").write_text(json.dumps(delta, indent=2))
+    run.status = RunStatus.EVOLVING.value
+    run.intent = new_spec.to_dict()
+    merged = {t.id: t for t in scheduler.design.tasks}
+    plan.tasks = [
+        t if t.component_id in added or t.component_id in changed else merged.get(f"T-{t.component_id}", t)
+        for t in plan.tasks
+    ]
+    for task in plan.tasks:
+        if task.component_id in changed:
+            task.state = TaskState.PENDING.value
+    run.set_design(plan)
+    scheduler.design = plan
+    scheduler.spec = new_spec
+    scheduler.refresh()
+    scheduler.persist()
+    ledger.append(run, run_dir, "evolve.planned", **{k: v for k, v in delta.items() if k != "regression_suite"})
+    print(json.dumps(delta, indent=2))
+    print("\nreopened/prepared tasks are READY; dispatch them as usual, then integrate and verify.")
+    print("previously verified tasks stay merged and keep running as the regression suite.")
+    return 0
+
+
+# -- helpers -------------------------------------------------------------
+def _load(run_dir: str) -> tuple[Run, Path]:
+    path = Path(run_dir)
+    return Run.load(path), path
+
+
+def _scheduler(run: Run, run_dir: Path) -> tuple[Scheduler, IntentSpec]:
+    spec = IntentSpec.from_dict(run.intent)
+    design = Design.from_dict(run.design)
+    return Scheduler(run, run_dir, spec, design), spec
+
+
+def _prose(raw: str) -> str:
+    """Recover the human sentence from a structured intent file, if present."""
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    for key in ("intent", "intent_text", "raw_intent", "summary"):
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return data.get("title", "")
+
+
+def _worktree_dirty(task) -> bool:
+    return bool(task.worktree) and Path(task.worktree).exists()
+
+
+def baseline_files(spec: IntentSpec, design: Design) -> dict[str, str]:
+    """The frozen baseline every worker starts from.
+
+    Contracts, the acceptance statement and the harness are committed *before*
+    any worker is dispatched, so no worker can grade its own homework.
+    """
+
+    files: dict[str, str] = {}
+    files["README.md"] = _readme(spec, design)
+    files["ACCEPTANCE.md"] = _acceptance_md(spec, design)
+    for contract in design.contracts:
+        body = [f"# {contract.id}: {contract.path}", "", contract.summary, ""]
+        if contract.exports:
+            body += ["## Frozen exports", ""]
+            body += [f"- `{name}`: {sig}" for name, sig in contract.exports.items()]
+        if getattr(contract, "content", ""):
+            body += ["", "## Content", "", contract.content]
+        files[f"contracts/{contract.id}.md"] = "\n".join(body) + "\n"
+    return files
+
+
+def harness_files(intent_path: str, spec: IntentSpec) -> dict[str, str]:
+    """Copy the frozen acceptance harness into the product baseline."""
+
+    if not spec.harness_dir:
+        return {}
+    root = (Path(intent_path).parent / spec.harness_dir).resolve()
+    if not root.is_dir():
+        raise FileNotFoundError(f"harness_dir not found: {root}")
+    files: dict[str, str] = {}
+    for path in sorted(root.rglob("*")):
+        if path.is_file():
+            rel = path.relative_to(root).as_posix()
+            files[f"harness/{rel}"] = path.read_text()
+    return files
+
+
+def _readme(spec: IntentSpec, design: Design) -> str:
+    lines = [
+        f"# {spec.title}",
+        "",
+        spec.summary,
+        "",
+        "## Deliverables",
+        "",
+    ]
+    lines += [f"- {d}" for d in spec.deliverables]
+    lines += [
+        "",
+        "## How this repository is verified",
+        "",
+        "This repository is produced and admitted to production by MiniFleet. "
+        "The acceptance harness in `harness/` was frozen before any implementation "
+        "work started, and every acceptance criterion in `ACCEPTANCE.md` is tied to a gate.",
+        "",
+        "## Components",
+        "",
+    ]
+    for component in spec.components:
+        lines.append(f"- **{component.id}** — {component.responsibility}")
+    return "\n".join(lines) + "\n"
+
+
+def _acceptance_md(spec: IntentSpec, design: Design) -> str:
+    lines = ["# Acceptance criteria (frozen)", "", "| id | kind | statement | gates |", "| --- | --- | --- | --- |"]
+    for criterion in spec.acceptance:
+        lines.append(
+            f"| {criterion.id} | {criterion.kind} | {criterion.statement} | {', '.join(criterion.gates)} |"
+        )
+    if spec.budgets:
+        lines += ["", "## Non-functional budgets", "", "| metric | budget |", "| --- | --- |"]
+        lines += [f"| {name} | {value} |" for name, value in spec.budgets.items()]
+    lines += ["", "## Gates", "", "| gate | kind | scope | command |", "| --- | --- | --- | --- |"]
+    for gate in design.gates:
+        lines.append(f"| {gate.id} | {gate.kind} | {gate.scope} | `{gate.cmd or gate.json_path or ','.join(gate.paths)}` |")
+    return "\n".join(lines) + "\n"
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

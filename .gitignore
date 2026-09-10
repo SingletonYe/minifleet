@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+
+# Run records are produced by `minifleet run`; each run contains a nested product
+# repository and one worktree per task, so they are not tracked here.
+runs/
+*.db
+*.db-wal
+*.db-shm

@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minifleet"
+version = "0.1.0"
+description = "Intent-to-production-system orchestration engine: a runnable replica of an autonomous software-engineering agent fleet"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = []
+
+[project.scripts]
+minifleet = "minifleet.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["minifleet*"]
