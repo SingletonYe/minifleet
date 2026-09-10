@@ -534,5 +534,40 @@ class RepairLoopTests(unittest.TestCase):
         self.assertEqual(metrics["deploy_failures"], 0.0)
 
 
+class LimitTests(unittest.TestCase):
+    """Autonomy has to be bounded, or a fleet is just an unattended process."""
+
+    def test_dispatch_budget_stops_dispatching(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            intent_path = root / "intent.json"
+            intent_path.write_text(json.dumps(_intent(limits={"max_dispatches": 1})))
+            spec = intent_mod.load(intent_path)
+            self.assertEqual(spec.limits["max_dispatches"], 1.0)
+
+            run, run_dir = ledger.create(root / "runs", spec, "fake")
+            design = architect.design(spec)
+            run.set_design(design)
+            scheduler = Scheduler(run, run_dir, spec, design)
+            scheduler.repo.init({})
+            scheduler.refresh()
+
+            first = scheduler.dispatch(FakeDispatcher({"T-calc": MODULE_FILES}))
+            self.assertEqual([item["task_id"] for item in first], ["T-calc"])
+
+            # The task needs another attempt, but the budget is spent.
+            scheduler.task("T-calc").state = TaskState.READY.value
+            scheduler.persist()
+            second = scheduler.dispatch(FakeDispatcher({"T-calc": MODULE_FILES}))
+            self.assertEqual(second, [])
+            self.assertIn("dispatch.budget_exhausted", [event["event"] for event in run.events])
+
+    def test_unknown_or_nonsense_limits_are_rejected(self):
+        for limits in ({"max_unicorns": 3}, {"max_attempts": 0}, {"max_rounds": -1}):
+            with self.subTest(limits=limits):
+                with self.assertRaises(intent_mod.IntentError):
+                    intent_mod.compile_dict(_intent(limits=limits))
+
+
 if __name__ == "__main__":
     unittest.main()

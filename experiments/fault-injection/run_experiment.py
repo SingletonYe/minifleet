@@ -34,7 +34,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RUNS = HERE / "runs"
 OUT = HERE / "out"
-INTENT = ROOT / "intents" / "quarantine.json"
+INTENT_DOC = ROOT / "intents" / "quarantine.md"
+INTENT = ROOT / "intents" / "quarantine.compiled.json"
 WORKER = HERE / "workers" / "worker.py"
 
 TRANSCRIPT: list[str] = []
@@ -66,6 +67,12 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     if RUNS.exists():
         shutil.rmtree(RUNS)
+
+    compile_step = run(["compile", "--text", str(INTENT_DOC), "--out", str(INTENT)])
+    if compile_step.returncode != 0:
+        print(compile_step.stdout, compile_step.stderr)
+        return 1
+    print(f"compiled intent: {INTENT.name}")
 
     plan = run(["plan", "--intent", str(INTENT), "--runs-dir", str(RUNS)])
     if plan.returncode != 0:
@@ -106,6 +113,8 @@ def main() -> int:
     summary = {
         "run_id": record["id"],
         "intent": record["intent_id"],
+        "intent_document": str(INTENT_DOC.relative_to(ROOT)),
+        "compile_notes": (record.get("intent") or {}).get("compile_notes", []),
         "final_status": record["status"],
         "final_verdict": record["verdict"],
         "autopilot_exit": autopilot.returncode,
@@ -253,6 +262,15 @@ def _result_markdown(summary: dict) -> str:
         "",
         f"Run `{summary['run_id']}` for intent `{summary['intent']}`, executed by "
         "`minifleet autopilot` against the engine's own repository.",
+        "",
+        "## 0. The intent was prose, not JSON",
+        "",
+        "The intent for this run was written as a Markdown document and compiled by "
+        "`minifleet compile`, which derived the components and their write scopes, the gate "
+        "set, the budgets and the acceptance-to-gate binding. What it decided on the "
+        "author's behalf is listed here rather than left implicit:",
+        "",
+    ] + [f"- {note}" for note in summary.get("compile_notes", [])] + [
         "",
         "## 1. The injected defect",
         "",

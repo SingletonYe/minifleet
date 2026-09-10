@@ -61,7 +61,10 @@ class Scheduler:
         return None
 
     def task_gates(self, task: Task) -> list[Gate]:
-        return [g for g in self.design.gates if g.id in task.gate_ids]
+        # Task gates run inside the worker's own worktree, so only gates that were
+        # designed for that stage may run there. A system gate named by a task
+        # belongs to the integrated tree, after the merge.
+        return [g for g in self.design.gates if g.id in task.gate_ids and g.scope == "task"]
 
     def system_gates(self) -> list[Gate]:
         return [g for g in self.design.gates if g.scope == "system"]
@@ -131,6 +134,20 @@ class Scheduler:
     ) -> list[dict[str, Any]]:
         """Dispatch the current ready wave; returns per-task results."""
 
+        budget = self.spec.limits.get("max_dispatches") if self.spec.limits else None
+        if budget:
+            used = sum(
+                len(event.get("tasks", []))
+                for event in self.run.events
+                if event.get("event") == "tasks.dispatched"
+            )
+            if used >= budget:
+                ledger.append(
+                    self.run, self.run_dir, "dispatch.budget_exhausted",
+                    used=used, budget=budget,
+                )
+                self.persist()
+                return []
         prepared = self.packets()
         if limit:
             prepared = prepared[:limit]

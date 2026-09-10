@@ -1,0 +1,218 @@
+{
+  "id": "minifleet-v03-quarantine",
+  "title": "MiniFleet v0.3: quarantine flaky gates",
+  "summary": "A gate that red-lights an unlucky run teaches people to ignore red. This intent adds\nflaky-gate quarantine to the engine itself: decide from repeated outcomes whether a gate is\nflaky, and refuse to decide when the sample is too small. It has to be done without breaking\nthe engine, the shipped service, or the deployment path - the service answers in well under\n50 ms today and must stay there.",
+  "intent": "# MiniFleet v0.3: quarantine flaky gates\n\nA gate that red-lights an unlucky run teaches people to ignore red. This intent adds\nflaky-gate quarantine to the engine itself: decide from repeated outcomes whether a gate is\nflaky, and refuse to decide when the sample is too small. It has to be done without breaking\nthe engine, the shipped service, or the deployment path - the service answers in well under\n50 ms today and must stay there.\n\n## Deliverables\n\n- minifleet/quarantine.py - classify repeated gate outcomes and list the gates worth quarantining\n- tests/test_quarantine.py - the worker's own tests\n\n## Acceptance\n\n- [harness] classify() labels an all-pass series, an all-fail series and a mixed series exactly, with a rounded pass_rate and the sample count\n- [harness] a sample smaller than min_samples - including an empty one - is insufficient-data with a null pass_rate, never a failure verdict\n- [harness] exactly min_samples outcomes are enough to decide: the boundary is inclusive\n- [harness] quarantine() returns only flaky gate ids, sorted ascending, and never quarantines insufficient data\n- [regression] the pre-existing engine suite still passes on the integrated tree\n- [service] the shipped linksvc service still passes its own acceptance harness\n- [deploy] the fleet can still deploy a running system, probe it, and stay inside its latency budget\n\n## Constraints\n\n- Python 3.12 standard library only\n- harness/ is frozen: workers may read it, never modify it\n\n## Out of scope\n\n- automatically re-running gates to collect samples\n- persisting quarantine state between runs\n\n## Budgets\n\n- deploy_ready_seconds <= 10\n- deploy_p50_ms <= 50\n\n## Contract\n\n- minifleet.quarantine.classify: classify(outcomes: list[bool], min_samples: int = 3, flake_threshold: float = 0.5) -> {\"verdict\": str, \"pass_rate\": float|None, \"samples\": int, \"dominant\": str|None}\n- minifleet.quarantine.quarantine: quarantine(gates: dict[str, list[bool]], min_samples: int = 3, flake_threshold: float = 0.5) -> list[str]\n\nInsufficient data is not a failure verdict: an empty or too-small sample has pass_rate None and\nno dominant side. The boundary is inclusive, so exactly min_samples outcomes decide.\n\n## Service\n\n- dir: examples/linksvc\n- harness: harness.test_accept\n\n## Deploy\n\n- dir: examples/linksvc\n- cmd: python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-compiled.db --rate 1000 --burst 1000\n- probe: /healthz\n- seconds: 3\n\n## Meta\n\n- id: minifleet-v03-quarantine\n- baseline_from: ..\n- harness_dir: harness-quarantine\n- max_attempts: 3\n- max_rounds: 4\n- max_dispatches: 6\n- max_wall_seconds: 900\n",
+  "stakeholders": [],
+  "deliverables": [
+    "minifleet/quarantine.py - classify repeated gate outcomes and list the gates worth quarantining",
+    "tests/test_quarantine.py - the worker's own tests"
+  ],
+  "constraints": [
+    "Python 3.12 standard library only",
+    "harness/ is frozen: workers may read it, never modify it"
+  ],
+  "out_of_scope": [
+    "automatically re-running gates to collect samples",
+    "persisting quarantine state between runs"
+  ],
+  "budgets": {
+    "deploy_ready_seconds": 10.0,
+    "deploy_p50_ms": 50.0
+  },
+  "acceptance": [
+    {
+      "id": "A-1",
+      "statement": "classify() labels an all-pass series, an all-fail series and a mixed series exactly, with a rounded pass_rate and the sample count",
+      "kind": "functional",
+      "gates": [
+        "G-harness"
+      ]
+    },
+    {
+      "id": "A-2",
+      "statement": "a sample smaller than min_samples - including an empty one - is insufficient-data with a null pass_rate, never a failure verdict",
+      "kind": "functional",
+      "gates": [
+        "G-harness"
+      ]
+    },
+    {
+      "id": "A-3",
+      "statement": "exactly min_samples outcomes are enough to decide: the boundary is inclusive",
+      "kind": "functional",
+      "gates": [
+        "G-harness"
+      ]
+    },
+    {
+      "id": "A-4",
+      "statement": "quarantine() returns only flaky gate ids, sorted ascending, and never quarantines insufficient data",
+      "kind": "functional",
+      "gates": [
+        "G-harness"
+      ]
+    },
+    {
+      "id": "A-5",
+      "statement": "the pre-existing engine suite still passes on the integrated tree",
+      "kind": "functional",
+      "gates": [
+        "G-regression"
+      ]
+    },
+    {
+      "id": "A-6",
+      "statement": "the shipped linksvc service still passes its own acceptance harness",
+      "kind": "functional",
+      "gates": [
+        "G-service"
+      ]
+    },
+    {
+      "id": "A-7",
+      "statement": "the fleet can still deploy a running system, probe it, and stay inside its latency budget",
+      "kind": "nfr",
+      "gates": [
+        "G-deploy",
+        "G-budget-deploy-p50-ms",
+        "G-budget-deploy-ready-seconds"
+      ]
+    }
+  ],
+  "gates": [
+    {
+      "id": "G-unit",
+      "title": "worker's own tests plus the baseline suite",
+      "kind": "cmd",
+      "scope": "task",
+      "cmd": "python3 -m unittest discover -s tests -v",
+      "timeout": 900.0
+    },
+    {
+      "id": "G-harness",
+      "title": "frozen acceptance harness (harness.test_quarantine)",
+      "kind": "cmd",
+      "scope": "system",
+      "cmd": "python3 -m unittest harness.test_quarantine -v",
+      "timeout": 900.0,
+      "attributed_to": [
+        "quarantine"
+      ]
+    },
+    {
+      "id": "G-service",
+      "title": "examples/linksvc still passes its own acceptance harness",
+      "kind": "cmd",
+      "scope": "system",
+      "cmd": "cd examples/linksvc && python3 -m unittest harness.test_accept -v",
+      "timeout": 900.0
+    },
+    {
+      "id": "G-stdlib-only",
+      "title": "no third-party imports",
+      "kind": "cmd",
+      "scope": "system",
+      "cmd": "python3 -m minifleet.checks stdlib-only --roots minifleet --project minifleet"
+    },
+    {
+      "id": "G-regression",
+      "title": "regression suite on the integrated tree",
+      "kind": "cmd",
+      "scope": "system",
+      "cmd": "python3 -m unittest discover -s tests",
+      "timeout": 900.0
+    },
+    {
+      "id": "G-deploy",
+      "title": "deploy and observe examples/linksvc",
+      "kind": "cmd",
+      "scope": "system",
+      "cmd": "python3 -m minifleet deploy --dir examples/linksvc --cmd \"python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-compiled.db --rate 1000 --burst 1000\" --probe /healthz --seconds 3.0 --emit-metrics",
+      "timeout": 900.0
+    },
+    {
+      "id": "G-budget-deploy-ready-seconds",
+      "title": "deploy_ready_seconds <= 10",
+      "kind": "budget",
+      "scope": "system",
+      "metric": "deploy_ready_seconds",
+      "op": "<=",
+      "threshold": 10.0
+    },
+    {
+      "id": "G-budget-deploy-p50-ms",
+      "title": "deploy_p50_ms <= 50",
+      "kind": "budget",
+      "scope": "system",
+      "metric": "deploy_p50_ms",
+      "op": "<=",
+      "threshold": 50.0
+    },
+    {
+      "id": "G-layout",
+      "title": "deliverables are where the intent says",
+      "kind": "files",
+      "scope": "system",
+      "paths": [
+        "minifleet/quarantine.py",
+        "tests/test_quarantine.py"
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "id": "C-1",
+      "path": "contracts/C-1.md",
+      "summary": "frozen interface derived from the intent",
+      "exports": {
+        "minifleet.quarantine.classify": "classify(outcomes: list[bool], min_samples: int = 3, flake_threshold: float = 0.5) -> {\"verdict\": str, \"pass_rate\": float|None, \"samples\": int, \"dominant\": str|None}",
+        "minifleet.quarantine.quarantine": "quarantine(gates: dict[str, list[bool]], min_samples: int = 3, flake_threshold: float = 0.5) -> list[str]"
+      },
+      "frozen": true,
+      "content": "Insufficient data is not a failure verdict: an empty or too-small sample has pass_rate None and\nno dominant side. The boundary is inclusive, so exactly min_samples outcomes decide."
+    }
+  ],
+  "harness_dir": "harness-quarantine",
+  "baseline_from": "..",
+  "components": [
+    {
+      "id": "quarantine",
+      "name": "Quarantine",
+      "responsibility": "classify repeated gate outcomes and list the gates worth quarantining",
+      "owns": [
+        "minifleet/quarantine.py",
+        "tests/test_quarantine.py"
+      ],
+      "depends_on": [],
+      "contract_ids": [
+        "C-1"
+      ],
+      "acceptance_ids": [
+        "A-1",
+        "A-2",
+        "A-3",
+        "A-4",
+        "A-5",
+        "A-6",
+        "A-7"
+      ],
+      "tests": [],
+      "done_when": [],
+      "gate_ids": [
+        "G-unit",
+        "G-harness"
+      ]
+    }
+  ],
+  "limits": {
+    "max_wall_seconds": 900.0,
+    "max_attempts": 3.0,
+    "max_dispatches": 6.0,
+    "max_rounds": 4.0
+  },
+  "compile_notes": [
+    "'standard library only' became an enforced import gate over minifleet",
+    "prose suggested budgets latency_under_ms=50; declare them under '## Budgets' to have them enforced"
+  ]
+}

@@ -82,6 +82,7 @@ class IntentSpec:
     contracts: list["Contract"] = field(default_factory=list)
     harness_dir: str = ""
     baseline_from: str = ""
+    limits: dict[str, float] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "IntentSpec":
@@ -100,6 +101,7 @@ class IntentSpec:
             contracts=[Contract.from_dict(c) for c in data.get("contracts", [])],
             harness_dir=data.get("harness_dir", ""),
             baseline_from=data.get("baseline_from", ""),
+            limits={str(k): float(v) for k, v in (data.get("limits") or {}).items()},
         )
 
     def to_dict(self) -> dict[str, Any]:

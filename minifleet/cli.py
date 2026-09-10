@@ -86,6 +86,13 @@ def main(argv: list[str] | None = None) -> int:
     p_deploy.add_argument("--emit-metrics", action="store_true",
                           help="print MINIFLEET_METRIC lines so budget gates can enforce them")
 
+    p_compile = sub.add_parser(
+        "compile", help="turn a prose intent document into a machine-checkable intent"
+    )
+    p_compile.add_argument("--text", required=True, help="the Markdown intent document")
+    p_compile.add_argument("--out", default=None, help="where to write the compiled intent JSON")
+    p_compile.add_argument("--backend", default="rules", choices=["rules", "llm"])
+
     p_autopilot = sub.add_parser(
         "autopilot", help="drive a run to a verdict: dispatch, verify, repair, repeat"
     )
@@ -112,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         "evolve": cmd_evolve,
         "repair": cmd_repair,
         "deploy": cmd_deploy,
+        "compile": cmd_compile,
         "autopilot": cmd_autopilot,
         "fleetmetrics": cmd_fleetmetrics,
     }[args.command]
@@ -427,6 +435,50 @@ def cmd_deploy(args: argparse.Namespace) -> int:
     return 0 if report["ok"] else 1
 
 
+def cmd_compile(args: argparse.Namespace) -> int:
+    """Compile a prose intent document into the JSON the fleet executes."""
+
+    from . import compile as compile_mod
+
+    try:
+        compilation = compile_mod.compile_path(args.text, backend=args.backend)
+    except compile_mod.CompileError as exc:
+        print(f"compilation failed: {exc}", file=sys.stderr)
+        return 2
+
+    data = compilation.data
+    gates = data["gates"]
+    print(f"intent   : {data['id']} - {data['title']}")
+    print(f"backend  : {compilation.backend}")
+    print(f"derived  : {len(data['components'])} component(s), {len(data['acceptance'])} acceptance "
+          f"criteria, {len(gates)} gate(s), {len(data['budgets'])} budget(s)")
+    print("")
+    print("components and write scopes:")
+    for component in data["components"]:
+        deps = f"  depends on {', '.join(component['depends_on'])}" if component["depends_on"] else ""
+        print(f"  {component['id']:<14}{', '.join(component['owns'])}{deps}")
+    print("")
+    print("gates:")
+    for gate in gates:
+        detail = gate.get("cmd") or gate.get("metric") or ", ".join(gate.get("paths", []))
+        print(f"  {gate['id']:<32}{gate['kind']:<8}{gate['scope']:<8}{str(detail)[:64]}")
+    print("")
+    print("acceptance criteria:")
+    for criterion in data["acceptance"]:
+        print(f"  {criterion['id']:<6}[{criterion['kind']:<10}] -> {', '.join(criterion['gates']):<28}"
+              f"{criterion['statement'][:60]}")
+    if compilation.notes:
+        print("")
+        print("what the compiler decided for you:")
+        for note in compilation.notes:
+            print(f"  - {note}")
+    if args.out:
+        Path(args.out).write_text(compilation.to_json())
+        print("")
+        print(f"written  : {args.out}")
+    return 0
+
+
 def cmd_autopilot(args: argparse.Namespace) -> int:
     """Drive a run to a verdict: dispatch, ingest, integrate, verify, repair, repeat.
 
@@ -436,16 +488,30 @@ def cmd_autopilot(args: argparse.Namespace) -> int:
     """
 
     run, run_dir = _load(args.run)
-    scheduler, _spec = _scheduler(run, run_dir)
+    scheduler, spec = _scheduler(run, run_dir)
     dispatcher = make_dispatcher(args.dispatcher)
     if isinstance(dispatcher, PacketDispatcher):
         print("autopilot needs a dispatcher that can run workers: command:<cmd> or http", file=sys.stderr)
         return 2
 
+    limits = spec.limits or {}
+    max_attempts = int(limits.get("max_attempts", args.max_attempts))
+    max_rounds = int(limits.get("max_rounds", args.max_rounds))
+    wall_budget = limits.get("max_wall_seconds")
+    started = time.time()
+    exhausted = ""
     history: list[dict[str, Any]] = []
-    for round_index in range(1, args.max_rounds + 1):
+    for round_index in range(1, max_rounds + 1):
+        if wall_budget and time.time() - started > wall_budget:
+            exhausted = f"wall-clock budget of {wall_budget:g}s is spent"
+            print(f"  {exhausted}; stopping")
+            break
         print(f"--- round {round_index}: dispatch ---")
         dispatched = scheduler.dispatch(dispatcher, max_parallel=args.max_parallel)
+        if not dispatched and scheduler.ready():
+            exhausted = "the dispatch budget is spent and work is still ready"
+            print(f"  {exhausted}; stopping")
+            break
         for item in dispatched:
             if item.get("status") == "submitted":
                 outcome = scheduler.ingest(item["task_id"], worker=str(item.get("worker", "")))
@@ -462,7 +528,7 @@ def cmd_autopilot(args: argparse.Namespace) -> int:
             history.append({"round": round_index, "integration": integration})
             print(f"  integration failed: {integration.get('detail') or integration.get('conflicts')}")
             break
-        verification = scheduler.verify(max_attempts=args.max_attempts)
+        verification = scheduler.verify(max_attempts=max_attempts)
         attribution = verification.get("attribution", {})
         history.append({
             "round": round_index,
@@ -475,7 +541,7 @@ def cmd_autopilot(args: argparse.Namespace) -> int:
         print(f"  verify: {verification['verdict']}")
         if scheduler.run.status == RunStatus.PASSED.value:
             break
-        repair = scheduler.repair_failed(max_attempts=args.max_attempts)
+        repair = scheduler.repair_failed(max_attempts=max_attempts)
         # verify() may already have reopened the failing task, in which case
         # repair_failed() has nothing new to add. What decides whether the loop
         # continues is not the repair report - it is whether any task is
@@ -494,13 +560,18 @@ def cmd_autopilot(args: argparse.Namespace) -> int:
 
     report_mod.write(run, run_dir)
     ledger.append(run, run_dir, "autopilot.finished", status=run.status, verdict=run.verdict,
-                  rounds=len(history))
+                  rounds=len(history), budget_exhausted=exhausted,
+                  seconds=round(time.time() - started, 3))
     print("")
     print(f"status : {run.status}")
     print(f"verdict: {run.verdict}")
     print(f"rounds : {len(history)}")
+    if exhausted:
+        print(f"budget : exhausted - {exhausted}")
     print(f"report : {run_dir / 'report.html'}")
-    return 0 if run.status == RunStatus.PASSED.value else 1
+    if run.status == RunStatus.PASSED.value:
+        return 0
+    return 3 if exhausted else 1
 
 
 def cmd_fleetmetrics(args: argparse.Namespace) -> int:

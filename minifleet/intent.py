@@ -87,6 +87,12 @@ def validate(spec: IntentSpec, source: str = "<inline>") -> None:
     for budget, value in spec.budgets.items():
         if not isinstance(value, (int, float)):
             problems.append(f"budget {budget!r} must be numeric")
+    allowed_limits = {"max_wall_seconds", "max_attempts", "max_dispatches", "max_rounds"}
+    for name, value in spec.limits.items():
+        if name not in allowed_limits:
+            problems.append(f"unknown limit {name!r}; supported: {sorted(allowed_limits)}")
+        elif not isinstance(value, (int, float)) or value <= 0:
+            problems.append(f"limit {name!r} must be a positive number")
     budget_names = set(spec.budgets)
     for gate in spec.gate_defs:
         if gate.kind == "budget":

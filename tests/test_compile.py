@@ -1,0 +1,187 @@
+"""The front door: prose must compile into something the fleet can actually execute."""
+
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from minifleet import architect, checks, compile as compile_mod, intent as intent_mod
+
+DOCUMENT = """# Swarm: a webhook relay
+
+Relay webhooks with retries and a dead-letter queue. The service must answer in under
+50 ms and sustain at least 200 requests per second.
+
+## Deliverables
+
+- relay/store.py - durable delivery state
+- relay/worker.py - retry loop and backoff | depends: store
+- tests/test_store.py - store tests
+- tests/test_worker.py - worker tests
+
+## Acceptance
+
+- [harness] a delivery survives a restart
+- [regression] the engine suite still passes
+- [policy] no third-party import sneaks in
+
+## Constraints
+
+- Python 3.12 standard library only
+
+## Out of scope
+
+- multi-region failover
+
+## Budgets
+
+- relay_p99_ms <= 250
+
+## Probes
+
+- relay_p99_ms: python3 harness/perf_probe.py
+
+## Meta
+
+- id: swarm-relay
+- harness_dir: harness-relay
+- max_attempts: 2
+- max_dispatches: 8
+"""
+
+
+class ParsingTest(unittest.TestCase):
+    def test_document_compiles_into_a_dispatchable_design(self):
+        compilation = compile_mod.compile_document(DOCUMENT)
+        data = compilation.data
+        self.assertEqual(data["id"], "swarm-relay")
+        self.assertEqual(sorted(c["id"] for c in data["components"]), ["store", "worker"])
+        scopes = {c["id"]: c["owns"] for c in data["components"]}
+        self.assertEqual(scopes["store"], ["relay/store.py", "tests/test_store.py"])
+        self.assertEqual(scopes["worker"], ["relay/worker.py", "tests/test_worker.py"])
+        self.assertEqual(
+            next(c for c in data["components"] if c["id"] == "worker")["depends_on"], ["store"]
+        )
+
+        # The design review must accept what the compiler produced.
+        design = architect.design(compilation.spec)
+        self.assertEqual(design.repairs, [])
+        self.assertEqual(len(design.tasks), 2)
+
+    def test_gates_are_derived_from_the_document(self):
+        data = compile_mod.compile_document(DOCUMENT).data
+        ids = {gate["id"] for gate in data["gates"]}
+        self.assertEqual(
+            ids,
+            {
+                "G-unit",
+                "G-harness",
+                "G-stdlib-only",
+                "G-regression",
+                "G-probe-relay-p99-ms",
+                "G-budget-relay-p99-ms",
+                "G-layout",
+            },
+        )
+        harness = next(gate for gate in data["gates"] if gate["id"] == "G-harness")
+        self.assertEqual(harness["scope"], "system")
+        self.assertEqual(harness["attributed_to"], ["store", "worker"])
+        unit = next(gate for gate in data["gates"] if gate["id"] == "G-unit")
+        self.assertEqual(unit["scope"], "task")
+
+    def test_acceptance_tags_bind_criteria_to_gates(self):
+        data = compile_mod.compile_document(DOCUMENT).data
+        mapping = {c["id"]: c["gates"] for c in data["acceptance"]}
+        self.assertEqual(mapping["A-1"], ["G-harness"])
+        self.assertEqual(mapping["A-2"], ["G-regression"])
+        self.assertEqual(mapping["A-3"], ["G-stdlib-only"])
+
+    def test_unknown_tag_is_a_compile_error(self):
+        document = DOCUMENT.replace("[policy]", "[telepathy]")
+        with self.assertRaises(compile_mod.CompileError):
+            compile_mod.compile_document(document)
+
+    def test_prose_budgets_are_suggested_not_silently_enforced(self):
+        compilation = compile_mod.compile_document(DOCUMENT)
+        self.assertIn("relay_p99_ms", compilation.data["budgets"])
+        self.assertNotIn("throughput_rps", compilation.data["budgets"])
+        self.assertTrue(any("prose suggested budgets" in note for note in compilation.notes))
+        self.assertTrue(
+            any("throughput_rps" in note or "latency_under_ms" in note for note in compilation.notes)
+        )
+
+    def test_a_budget_without_a_probe_is_called_out(self):
+        document = DOCUMENT.replace("## Probes\n\n- relay_p99_ms: python3 harness/perf_probe.py\n\n", "")
+        compilation = compile_mod.compile_document(document)
+        self.assertTrue(any("relay_p99_ms" in note and "probe" in note for note in compilation.notes))
+
+    def test_limits_are_parsed_and_validated(self):
+        data = compile_mod.compile_document(DOCUMENT).data
+        self.assertEqual(data["limits"], {"max_attempts": 2.0, "max_dispatches": 8.0})
+        broken = dict(data, limits={"max_unicorns": 3.0})
+        with self.assertRaises(intent_mod.IntentError):
+            intent_mod.validate(intent_mod.IntentSpec.from_dict(broken))
+
+    def test_missing_sections_are_refused(self):
+        with self.assertRaises(compile_mod.CompileError):
+            compile_mod.compile_document("# Nothing\n\nno sections at all\n")
+        with self.assertRaises(compile_mod.CompileError):
+            compile_mod.compile_document(DOCUMENT.replace("## Acceptance", "## Vibes"))
+
+    def test_a_dependency_on_an_unknown_component_is_refused(self):
+        document = DOCUMENT.replace("| depends: store", "| depends: datalake")
+        with self.assertRaises(compile_mod.CompileError):
+            compile_mod.compile_document(document)
+
+    def test_llm_backend_without_a_model_is_an_explicit_failure(self):
+        refiner = compile_mod.HttpRefiner(base_url="", api_key="")
+        self.assertFalse(refiner.available())
+        with self.assertRaises(compile_mod.CompileError):
+            compile_mod.compile_text(DOCUMENT, backend="llm", refiner=refiner)
+
+    def test_llm_backend_revalidates_what_it_was_given(self):
+        class BadRefiner(compile_mod.HttpRefiner):
+            def available(self) -> bool:
+                return True
+
+            def refine(self, draft, text):  # noqa: ANN001
+                broken = dict(draft)
+                broken["acceptance"] = []          # an intent nobody can falsify
+                compile_mod.validate_intent(broken)
+                return broken
+
+        with self.assertRaises(compile_mod.CompileError):
+            compile_mod.compile_text(DOCUMENT, backend="llm", refiner=BadRefiner())
+
+
+class PolicyCheckTest(unittest.TestCase):
+    def test_stdlib_only_flags_a_third_party_import(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "pkg"
+            root.mkdir()
+            (root / "clean.py").write_text("import json\nfrom pathlib import Path\n")
+            (root / "dirty.py").write_text("import requests\n")
+            violations = checks.stdlib_only([str(root)], allow=[], project=["pkg"])
+            self.assertEqual(len(violations), 1)
+            self.assertIn("requests", violations[0])
+
+    def test_stdlib_only_accepts_the_projects_own_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "pkg"
+            root.mkdir()
+            (root / "mod.py").write_text("from pkg import other\nimport json\n")
+            self.assertEqual(checks.stdlib_only([str(root)], allow=[], project=["pkg"]), [])
+
+    def test_no_network_honours_the_allowlist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "pkg"
+            root.mkdir()
+            probe = root / "probe.py"
+            probe.write_text("import urllib.request\n")
+            self.assertEqual(len(checks.no_network([str(root)], allow=[])), 1)
+            self.assertEqual(checks.no_network([str(root)], allow=[str(probe)]), [])
+
+
+if __name__ == "__main__":
+    unittest.main()
