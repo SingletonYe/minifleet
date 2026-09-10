@@ -89,6 +89,8 @@ actually produced and admitted, and [`evidence/linksvc-run/`](evidence/linksvc-r
 record of that run - the frozen packets handed to each worker, the per-gate evidence, the
 append-only ledger and the generated report.
 
+The rendered report is published at <https://minifleet-run-report.okou.app>.
+
 | what the fleet did | where it is recorded |
 | --- | --- |
 | intent compiled, three tasks planned, two dispatched in parallel | `evidence/linksvc-run/ledger.jsonl` |
