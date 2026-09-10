@@ -1,19 +1,17 @@
-{"dispatcher": "packet", "event": "run.created", "intent": "minifleet-v03-quarantine", "t": 1789064313.855782}
-{"dirty": true, "event": "baseline.adopted", "files": 148, "mode": "git-revision", "revision": "181becc021eb083cf1bee6b9a625cf53bd97e7e4", "source": "/home/user/workspace/minifleet", "t": 1789064314.0166726}
-{"event": "tasks.ready", "t": 1789064314.0813067, "tasks": ["T-quarantine"]}
-{"event": "plan.complete", "gates": 9, "t": 1789064314.1206803, "tasks": 1}
-{"dispatcher": "command", "event": "tasks.dispatched", "t": 1789064314.244739, "tasks": ["T-quarantine"]}
-{"commit": "17b60a734680b7ca4c7f833cc85bb1b5c724c9cc", "event": "task.submitted", "files": ["minifleet/quarantine.py", "tests/test_quarantine.py"], "notes": "", "t": 1789064314.315799, "task": "T-quarantine", "worker": "/usr/bin/python3 /home/user/workspace/minifleet/experiments/fault-injection/workers/worker.py"}
-{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789064321.6746566, "task": "T-quarantine"}
-{"branch": "task/quarantine", "event": "task.merged", "t": 1789064321.706288, "task": "T-quarantine"}
-{"attempt": 1, "brief": "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T181833Z-minifleet-v03-quarantine-5eea20/packets/T-quarantine.repair.json", "escalate": false, "event": "system.attributed", "gate": "G-harness", "t": 1789064334.2326112, "task": "T-quarantine"}
-{"event": "system.unattributed", "gates": ["G-stdlib-only"], "t": 1789064334.2326772}
-{"event": "tasks.ready", "t": 1789064334.2327168, "tasks": ["T-quarantine"]}
-{"event": "system.verified", "gates": {"G-budget-deploy-p50-ms": "pass", "G-budget-deploy-ready-seconds": "pass", "G-deploy": "pass", "G-harness": "fail", "G-layout": "pass", "G-regression": "pass", "G-service": "pass", "G-stdlib-only": "fail"}, "reopened": ["T-quarantine"], "t": 1789064334.2391403, "unattributed": ["G-stdlib-only"], "verdict": "fail: G-harness=fail, G-stdlib-only=fail"}
-{"dispatcher": "command", "event": "tasks.dispatched", "t": 1789064334.2829466, "tasks": ["T-quarantine"]}
-{"commit": "f22e88a20215428d5a0eb3175989be775a7e67d4", "event": "task.submitted", "files": ["minifleet/quarantine.py"], "notes": "", "t": 1789064334.347686, "task": "T-quarantine", "worker": "/usr/bin/python3 /home/user/workspace/minifleet/experiments/fault-injection/workers/worker.py"}
-{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789064341.1331282, "task": "T-quarantine"}
-{"branch": "task/quarantine-a2", "event": "task.merged", "t": 1789064341.162094, "task": "T-quarantine"}
-{"event": "system.unattributed", "gates": ["G-stdlib-only"], "t": 1789064352.9649017}
-{"event": "system.verified", "gates": {"G-budget-deploy-p50-ms": "pass", "G-budget-deploy-ready-seconds": "pass", "G-deploy": "pass", "G-harness": "pass", "G-layout": "pass", "G-regression": "pass", "G-service": "pass", "G-stdlib-only": "fail"}, "reopened": [], "t": 1789064352.969072, "unattributed": ["G-stdlib-only"], "verdict": "fail: G-stdlib-only=fail"}
-{"budget_exhausted": "", "event": "autopilot.finished", "rounds": 2, "seconds": 38.742, "status": "failed", "t": 1789064352.973011, "verdict": "fail: G-stdlib-only=fail"}
+{"dispatcher": "packet", "event": "run.created", "intent": "minifleet-v03-quarantine", "t": 1789064386.649736}
+{"dirty": false, "event": "baseline.adopted", "files": 149, "mode": "git-revision", "revision": "8b89fd9e1676aed02c354e2f64940dfc074ee79d", "source": "/home/user/workspace/minifleet", "t": 1789064386.6812022}
+{"event": "tasks.ready", "t": 1789064386.7380207, "tasks": ["T-quarantine"]}
+{"event": "plan.complete", "gates": 9, "t": 1789064386.7688453, "tasks": 1}
+{"dispatcher": "command", "event": "tasks.dispatched", "t": 1789064386.877742, "tasks": ["T-quarantine"]}
+{"commit": "fbe198faa3e0d4b80d7c98132c9105de3c738db5", "event": "task.submitted", "files": ["minifleet/quarantine.py", "tests/test_quarantine.py"], "notes": "", "t": 1789064386.9422247, "task": "T-quarantine", "worker": "/usr/bin/python3 /home/user/workspace/minifleet/experiments/fault-injection/workers/worker.py"}
+{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789064394.2381647, "task": "T-quarantine"}
+{"branch": "task/quarantine", "event": "task.merged", "t": 1789064394.2697198, "task": "T-quarantine"}
+{"attempt": 1, "brief": "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T181946Z-minifleet-v03-quarantine-b1431f/packets/T-quarantine.repair.json", "escalate": false, "event": "system.attributed", "gate": "G-harness", "t": 1789064406.7793746, "task": "T-quarantine"}
+{"event": "tasks.ready", "t": 1789064406.779443, "tasks": ["T-quarantine"]}
+{"event": "system.verified", "gates": {"G-budget-deploy-p50-ms": "pass", "G-budget-deploy-ready-seconds": "pass", "G-deploy": "pass", "G-harness": "fail", "G-layout": "pass", "G-regression": "pass", "G-service": "pass", "G-stdlib-only": "pass"}, "reopened": ["T-quarantine"], "t": 1789064406.785426, "unattributed": [], "verdict": "fail: G-harness=fail"}
+{"dispatcher": "command", "event": "tasks.dispatched", "t": 1789064406.8302665, "tasks": ["T-quarantine"]}
+{"commit": "f52404bbf02d58d505d9e5256946ae44fae63b40", "event": "task.submitted", "files": ["minifleet/quarantine.py"], "notes": "", "t": 1789064406.896044, "task": "T-quarantine", "worker": "/usr/bin/python3 /home/user/workspace/minifleet/experiments/fault-injection/workers/worker.py"}
+{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789064414.213452, "task": "T-quarantine"}
+{"branch": "task/quarantine-a2", "event": "task.merged", "t": 1789064414.2418919, "task": "T-quarantine"}
+{"event": "system.verified", "gates": {"G-budget-deploy-p50-ms": "pass", "G-budget-deploy-ready-seconds": "pass", "G-deploy": "pass", "G-harness": "pass", "G-layout": "pass", "G-regression": "pass", "G-service": "pass", "G-stdlib-only": "pass"}, "reopened": [], "t": 1789064426.5632787, "unattributed": [], "verdict": "pass: all required gates green"}
+{"budget_exhausted": "", "event": "autopilot.finished", "rounds": 2, "seconds": 39.708, "status": "passed", "t": 1789064426.573183, "verdict": "pass: all required gates green"}

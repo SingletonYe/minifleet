@@ -1,6 +1,6 @@
 # Task packet T-quarantine - Quarantine
 
-Run: `20260910T181833Z-minifleet-v03-quarantine-5eea20`   Role: **builder**   Branch: `task/quarantine-a2`
+Run: `20260910T181946Z-minifleet-v03-quarantine-b1431f`   Role: **builder**   Branch: `task/quarantine-a2`
 
 ## Goal
 

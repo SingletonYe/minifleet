@@ -42,7 +42,7 @@ footer { padding:18px 28px 40px; color:var(--muted); font-size:12.5px; border-to
 <main>
 <h1>Injected-fault experiment: does the repair loop actually close?</h1>
 
-<p>Run <code>20260910T181833Z-minifleet-v03-quarantine-5eea20</code> for intent <code>minifleet-v03-quarantine</code>, executed by <code>minifleet autopilot</code> against the engine&#x27;s own repository.</p>
+<p>Run <code>20260910T181946Z-minifleet-v03-quarantine-b1431f</code> for intent <code>minifleet-v03-quarantine</code>, executed by <code>minifleet autopilot</code> against the engine&#x27;s own repository.</p>
 
 <h2>0. The intent was prose, not JSON</h2>
 
@@ -61,18 +61,13 @@ footer { padding:18px 28px 40px; color:var(--muted); font-size:12.5px; border-to
 <li><code>G-harness</code> -&gt; <strong>fail</strong>: exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: &#x27;stable-fail&#x27; != &#x27;insufficient-data&#x27; | AssertionError: &#x27;insufficient-data&#x27; != &#x27;flaky&#x27; | AssertionError: {&#x27;verdict&#x27;: &#x27;insufficient-data&#x27;, &#x27;pass_rate&#x27;: None, &#x27;s[24 chars]None} != {&#x27;verdict&#x27;: &#x27;stable-fail&#x27;, &#x27;pa</li>
 </ul>
 <p>- AssertionError: &#x27;stable-fail&#x27; != &#x27;insufficient-data&#x27;</p>
-<ul>
-<li><code>G-stdlib-only</code> -&gt; <strong>fail</strong>: exit=1 (expected [0]): stdlib-only: 1 violation(s) | - minifleet/intent.py: imports &#x27;yaml&#x27;, which is not in the standard library</li>
-<li><code>G-stdlib-only</code> -&gt; <strong>fail</strong>: exit=1 (expected [0]): stdlib-only: 1 violation(s) | - minifleet/intent.py: imports &#x27;yaml&#x27;, which is not in the standard library</li>
-</ul>
 
-<p>Round 1 verdict: <code>fail: G-harness=fail, G-stdlib-only=fail</code></p>
+<p>Round 1 verdict: <code>fail: G-harness=fail</code></p>
 
 <h2>3. What the fleet did about it</h2>
 
 <ul>
 <li>gate <code>G-harness</code> attributed to task <code>T-quarantine</code> (attempt 1, escalate=False)</li>
-<li>gates nobody claimed were reported rather than retried: [&#x27;G-stdlib-only&#x27;]</li>
 </ul>
 
 <p>The repair packet the fleet handed to the next attempt:</p>
@@ -99,13 +94,13 @@ footer { padding:18px 28px 40px; color:var(--muted); font-size:12.5px; border-to
 
 <h2>4. The second attempt</h2>
 
-<p>The worker read <code>packets/T-quarantine.repair.json</code>, fixed the module and resubmitted. Final verdict: <strong>fail: G-stdlib-only=fail</strong> (round verdicts: [&#x27;fail: G-harness=fail, G-stdlib-only=fail&#x27;, &#x27;fail: G-stdlib-only=fail&#x27;]).</p>
+<p>The worker read <code>packets/T-quarantine.repair.json</code>, fixed the module and resubmitted. Final verdict: <strong>pass: all required gates green</strong> (round verdicts: [&#x27;fail: G-harness=fail&#x27;, &#x27;pass: all required gates green&#x27;]).</p>
 
 <h2>5. Deployment, observed by the fleet itself</h2>
 
 <ul>
-<li>ready in 0.079s on port 36629</li>
-<li>smoke <code>200</code>, soak 17 samples / 0 failures, p50 1.707 ms, max 1.936 ms</li>
+<li>ready in 0.065s on port 34097</li>
+<li>smoke <code>200</code>, soak 17 samples / 0 failures, p50 1.611 ms, max 1.906 ms</li>
 <li>budget gates: ready &lt;= 10s and p50 &lt;= 50ms both enforced as system gates</li>
 </ul>
 
@@ -114,19 +109,19 @@ footer { padding:18px 28px 40px; color:var(--muted); font-size:12.5px; border-to
 <pre>
 {
   &quot;attempts_total&quot;: 2,
-  &quot;critical_path_seconds&quot;: 26.887,
+  &quot;critical_path_seconds&quot;: 27.335,
   &quot;failed&quot;: 0,
-  &quot;gates_failed&quot;: 3,
-  &quot;gates_passed&quot;: 15,
+  &quot;gates_failed&quot;: 1,
+  &quot;gates_passed&quot;: 17,
   &quot;gates_total&quot;: 18,
   &quot;merged&quot;: 1,
   &quot;retries&quot;: 1,
   &quot;slowest_task&quot;: {
     &quot;id&quot;: &quot;T-quarantine&quot;,
-    &quot;seconds&quot;: 26.887
+    &quot;seconds&quot;: 27.335
   },
   &quot;tasks&quot;: 1,
-  &quot;verdict&quot;: &quot;fail: G-stdlib-only=fail&quot;
+  &quot;verdict&quot;: &quot;pass: all required gates green&quot;
 }
 </pre>
 

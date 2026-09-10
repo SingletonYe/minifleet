@@ -93,9 +93,30 @@ definition of done: exact click counts under eight concurrent writers, no data l
 The acceptance harness (`intents/harness-linksvc/`) is written by the verification layer,
 not by the workers, and is committed before they start.
 
+## The front door: a prose intent compiles into a checkable spec
+
+An intent written by hand is an intent nobody writes twice. `minifleet compile` reads a short
+Markdown document and derives the mechanical parts - components and their disjoint write scopes
+from the deliverables, the gate set from the gate library, the binding from each acceptance
+criterion to the gate that will judge it, budget gates from declared metrics, and policy gates
+such as "standard library only" from the constraints:
+
+```bash
+python3 -m minifleet compile --text intents/quarantine.md --out intents/quarantine.compiled.json
+python3 -m minifleet plan    --intent intents/quarantine.compiled.json
+```
+
+A constraint becomes a gate with teeth: `standard library only` is enforced by an import scan
+(`python3 -m minifleet.checks stdlib-only`), and an exception has to be declared in the intent
+rather than quietly weakening the check.
+
+Autonomy is bounded by the same document: `max_attempts`, `max_rounds`, `max_dispatches` and
+`max_wall_seconds` under `## Meta` are enforced by the scheduler and the autopilot, which stop
+and say which budget ran out instead of looping unattended.
+
 ## The repair loop, tested with an injected fault
 
-`experiments/fault-injection/` runs the fleet against the engine's own repository
+`experiments/fault-injection/` compiles a prose intent, then runs the fleet against the engine's own repository
 and injects a defect that no task gate can see: the worker's own tests pass, and the
 frozen harness fails. The run then has to detect it, attribute it to the component
 that caused it, hand the next attempt an actionable packet, and re-verify.
