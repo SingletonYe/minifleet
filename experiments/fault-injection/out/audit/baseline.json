@@ -1,7 +1,7 @@
 {
-  "dirty": false,
-  "files": 123,
+  "dirty": true,
+  "files": 148,
   "mode": "git-revision",
-  "revision": "7d45fc34eabdd97063637ab06d0cab4520936ac3",
+  "revision": "181becc021eb083cf1bee6b9a625cf53bd97e7e4",
   "source": "/home/user/workspace/minifleet"
 }

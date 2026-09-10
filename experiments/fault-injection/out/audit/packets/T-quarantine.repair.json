@@ -8,16 +8,16 @@
   "failing_gates": [
     {
       "detail": "exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pa",
-      "gate_id": "G-quarantine",
+      "gate_id": "G-harness",
       "status": "fail"
     }
   ],
   "instructions": [
-    "Fix gate G-quarantine (status fail): exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pa",
-    "Re-run gate G-quarantine locally and confirm it passes."
+    "Fix gate G-harness (status fail): exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pa",
+    "Re-run gate G-harness locally and confirm it passes."
   ],
   "max_attempts": 3,
-  "reason": "attempt 1/3 failed 1 gate(s): G-quarantine",
+  "reason": "attempt 1/3 failed 1 gate(s): G-harness",
   "scope": [
     "minifleet/quarantine.py",
     "tests/test_quarantine.py"

@@ -1,26 +1,26 @@
 {
-  "cmd": "python3 -m minifleet deploy --dir examples/linksvc --cmd \"python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-v03-deploy.db --rate 1000 --burst 1000\" --probe /healthz --seconds 3 --emit-metrics",
+  "cmd": "python3 -m minifleet deploy --dir examples/linksvc --cmd \"python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-compiled.db --rate 1000 --burst 1000\" --probe /healthz --seconds 3.0 --emit-metrics",
   "evidence": {
     "artifacts": [],
     "detail": "exit=0 (expected [0])",
-    "duration_s": 3.3703854084014893,
+    "duration_s": 3.3641555309295654,
     "exit_code": 0,
     "gate_id": "G-deploy",
     "metrics": {
       "deploy_failures": 0.0,
-      "deploy_max_ms": 1.91,
+      "deploy_max_ms": 1.942,
       "deploy_ok": 1.0,
-      "deploy_p50_ms": 1.731,
-      "deploy_ready_seconds": 0.068,
+      "deploy_p50_ms": 1.75,
+      "deploy_ready_seconds": 0.064,
       "deploy_samples": 13.0,
       "deploy_smoke_ms": 23.8,
       "deploy_smoke_status": 200.0
     },
-    "output_tail": "{\n  \"cmd\": \"python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-v03-deploy.db --rate 1000 --burst 1000\",\n  \"dir\": \"examples/linksvc\",\n  \"exit_code\": 0,\n  \"ok\": true,\n  \"probe\": \"/healthz\",\n  \"ready\": {\n    \"port\": 46331,\n    \"ready\": true,\n    \"seconds\": 0.068,\n    \"stdout_tail\": \"MINIFLEET_READY {\\\"port\\\": 46331}\\n{\\\"burst\\\": 1000, \\\"db\\\": \\\"/tmp/minifleet-v03-deploy.db\\\", \\\"event\\\": \\\"listening\\\", \\\"host\\\": \\\"127.0.0.1\\\", \\\"level\\\": \\\"info\\\", \\\"port\\\": 46331, \\\"rate\\\": 1000.0, \\\"ts\\\": 1789048189.372857}\"\n  },\n  \"smoke\": {\n    \"ok\": true,\n    \"seconds\": 0.0238,\n    \"status\": 200\n  },\n  \"soak\": {\n    \"failures\": 0,\n    \"max_ms\": 1.91,\n    \"ok\": true,\n    \"p50_ms\": 1.731,\n    \"samples\": 13\n  },\n  \"url\": \"http://127.0.0.1:46331/healthz\"\n}\nMINIFLEET_METRIC {\"name\": \"deploy_ok\", \"value\": 1.0}\nMINIFLEET_METRIC {\"name\": \"deploy_ready_seconds\", \"value\": 0.068}\nMINIFLEET_METRIC {\"name\": \"deploy_smoke_ms\", \"value\": 23.8}\nMINIFLEET_METRIC {\"name\": \"deploy_smoke_status\", \"value\": 200.0}\nMINIFLEET_METRIC {\"name\": \"deploy_p50_ms\", \"value\": 1.731}\nMINIFLEET_METRIC {\"name\": \"deploy_max_ms\", \"value\": 1.91}\nMINIFLEET_METRIC {\"name\": \"deploy_samples\", \"value\": 13.0}\nMINIFLEET_METRIC {\"name\": \"deploy_failures\", \"value\": 0.0}\n",
-    "recorded_at": 1789048192.5840054,
+    "output_tail": "{\n  \"cmd\": \"python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-compiled.db --rate 1000 --burst 1000\",\n  \"dir\": \"examples/linksvc\",\n  \"exit_code\": 0,\n  \"ok\": true,\n  \"probe\": \"/healthz\",\n  \"ready\": {\n    \"port\": 33137,\n    \"ready\": true,\n    \"seconds\": 0.064,\n    \"stdout_tail\": \"MINIFLEET_READY {\\\"port\\\": 33137}\\n{\\\"burst\\\": 1000, \\\"db\\\": \\\"/tmp/minifleet-compiled.db\\\", \\\"event\\\": \\\"listening\\\", \\\"host\\\": \\\"127.0.0.1\\\", \\\"level\\\": \\\"info\\\", \\\"port\\\": 33137, \\\"rate\\\": 1000.0, \\\"ts\\\": 1789064349.751901}\"\n  },\n  \"smoke\": {\n    \"ok\": true,\n    \"seconds\": 0.0238,\n    \"status\": 200\n  },\n  \"soak\": {\n    \"failures\": 0,\n    \"max_ms\": 1.942,\n    \"ok\": true,\n    \"p50_ms\": 1.75,\n    \"samples\": 13\n  },\n  \"url\": \"http://127.0.0.1:33137/healthz\"\n}\nMINIFLEET_METRIC {\"name\": \"deploy_ok\", \"value\": 1.0}\nMINIFLEET_METRIC {\"name\": \"deploy_ready_seconds\", \"value\": 0.064}\nMINIFLEET_METRIC {\"name\": \"deploy_smoke_ms\", \"value\": 23.8}\nMINIFLEET_METRIC {\"name\": \"deploy_smoke_status\", \"value\": 200.0}\nMINIFLEET_METRIC {\"name\": \"deploy_p50_ms\", \"value\": 1.75}\nMINIFLEET_METRIC {\"name\": \"deploy_max_ms\", \"value\": 1.942}\nMINIFLEET_METRIC {\"name\": \"deploy_samples\", \"value\": 13.0}\nMINIFLEET_METRIC {\"name\": \"deploy_failures\", \"value\": 0.0}\n",
+    "recorded_at": 1789064352.9644296,
     "status": "pass",
     "task_id": ""
   },
   "gate": "G-deploy",
-  "title": "deploy and observe the shipped service"
+  "title": "deploy and observe examples/linksvc"
 }

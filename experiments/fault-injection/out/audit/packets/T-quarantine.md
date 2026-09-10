@@ -1,10 +1,10 @@
-# Task packet T-quarantine - Flaky-gate quarantine
+# Task packet T-quarantine - Quarantine
 
-Run: `20260910T134913Z-minifleet-v03-quarantine-d94998`   Role: **builder**   Branch: `task/quarantine-a2`
+Run: `20260910T181833Z-minifleet-v03-quarantine-5eea20`   Role: **builder**   Branch: `task/quarantine-a2`
 
 ## Goal
 
-Implement minifleet/quarantine.py: classify repeated gate outcomes and list the gates worth quarantining.
+classify repeated gate outcomes and list the gates worth quarantining
 
 ## Write scope (may not be exceeded)
 
@@ -15,30 +15,30 @@ Any file outside this scope is owned by another worker. Touching it will fail th
 
 ## Frozen contracts
 
-### C-V03 - `contracts/C-V03.md`
+### C-1 - `contracts/C-1.md`
 
-Frozen interface for flaky-gate quarantine.
+frozen interface derived from the intent
 
-- `minifleet.quarantine.classify`: classify(outcomes: list[bool], min_samples: int = 3, flake_threshold: float = 0.5) -> {'verdict': str, 'pass_rate': float|None, 'samples': int, 'dominant': str|None}
+- `minifleet.quarantine.classify`: classify(outcomes: list[bool], min_samples: int = 3, flake_threshold: float = 0.5) -> {"verdict": str, "pass_rate": float|None, "samples": int, "dominant": str|None}
 - `minifleet.quarantine.quarantine`: quarantine(gates: dict[str, list[bool]], min_samples: int = 3, flake_threshold: float = 0.5) -> list[str]
 
 ## Definition of done
 
-- classify() returns exactly the four documented keys
-- insufficient data - including the empty sample - is never given a verdict
-- min_samples is an inclusive boundary
-- quarantine() returns sorted flaky gate ids only
+- (unspecified)
 
 ## Tests you must write and run
 
-- unit tests for stable, flaky and insufficient-data cases
+- (unspecified)
 
 ## Acceptance criteria this task feeds
 
-- **A-1** (functional): classify() labels all-pass as stable-pass, all-fail as stable-fail and mixed outcomes as flaky, with an exact pass_rate and sample count
-- **A-2** (safety): A sample smaller than min_samples - including an empty one - is insufficient-data with a null pass_rate, never a verdict
-- **A-3** (functional): Exactly min_samples outcomes are enough to decide; the boundary is inclusive
-- **A-4** (functional): quarantine() returns only flaky gates, sorted, and never quarantines insufficient data
+- **A-1** (functional): classify() labels an all-pass series, an all-fail series and a mixed series exactly, with a rounded pass_rate and the sample count
+- **A-2** (functional): a sample smaller than min_samples - including an empty one - is insufficient-data with a null pass_rate, never a failure verdict
+- **A-3** (functional): exactly min_samples outcomes are enough to decide: the boundary is inclusive
+- **A-4** (functional): quarantine() returns only flaky gate ids, sorted ascending, and never quarantines insufficient data
+- **A-5** (functional): the pre-existing engine suite still passes on the integrated tree
+- **A-6** (functional): the shipped linksvc service still passes its own acceptance harness
+- **A-7** (nfr): the fleet can still deploy a running system, probe it, and stay inside its latency budget
 
 ## System budgets (enforced later, by the fleet)
 

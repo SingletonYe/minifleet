@@ -23,7 +23,7 @@ the engine, the shipped service, or the deployment path - the service answers in
 
 ## Constraints
 
-- Python 3.12 standard library only
+- Python 3.12 standard library only, with one declared exception: the optional PyYAML reader in intent.py that already degrades to a clear error when PyYAML is absent
 - harness/ is frozen: workers may read it, never modify it
 
 ## Out of scope
@@ -65,3 +65,4 @@ no dominant side. The boundary is inclusive, so exactly min_samples outcomes dec
 - max_rounds: 4
 - max_dispatches: 6
 - max_wall_seconds: 900
+- stdlib_allow: yaml

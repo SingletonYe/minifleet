@@ -1,6 +1,11 @@
 # Injected-fault experiment: does the repair loop actually close?
 
-Run `20260910T134913Z-minifleet-v03-quarantine-d94998` for intent `minifleet-v03-quarantine`, executed by `minifleet autopilot` against the engine's own repository.
+Run `20260910T181833Z-minifleet-v03-quarantine-5eea20` for intent `minifleet-v03-quarantine`, executed by `minifleet autopilot` against the engine's own repository.
+
+## 0. The intent was prose, not JSON
+
+The intent for this run was written as a Markdown document and compiled by `minifleet compile`, which derived the components and their write scopes, the gate set, the budgets and the acceptance-to-gate binding. What it decided on the author's behalf is listed here rather than left implicit:
+
 
 ## 1. The injected defect
 
@@ -10,14 +15,17 @@ The task gate (`python3 -m unittest discover -s tests -v`) passed anyway - the w
 
 ## 2. What the fleet saw on the first attempt
 
-- `G-quarantine` -> **fail**: exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pa
+- `G-harness` -> **fail**: exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pa
   - AssertionError: 'stable-fail' != 'insufficient-data'
+- `G-stdlib-only` -> **fail**: exit=1 (expected [0]): stdlib-only: 1 violation(s) | - minifleet/intent.py: imports 'yaml', which is not in the standard library
+- `G-stdlib-only` -> **fail**: exit=1 (expected [0]): stdlib-only: 1 violation(s) | - minifleet/intent.py: imports 'yaml', which is not in the standard library
 
-Round 1 verdict: `fail: G-quarantine=fail`
+Round 1 verdict: `fail: G-harness=fail, G-stdlib-only=fail`
 
 ## 3. What the fleet did about it
 
-- gate `G-quarantine` attributed to task `T-quarantine` (attempt 1, escalate=False)
+- gate `G-harness` attributed to task `T-quarantine` (attempt 1, escalate=False)
+- gates nobody claimed were reported rather than retried: ['G-stdlib-only']
 
 The repair packet the fleet handed to the next attempt:
 
@@ -26,29 +34,29 @@ The repair packet the fleet handed to the next attempt:
   "attempt": 1,
   "max_attempts": 3,
   "escalate": false,
-  "reason": "attempt 1/3 failed 1 gate(s): G-quarantine",
+  "reason": "attempt 1/3 failed 1 gate(s): G-harness",
   "failing_gates": [
     {
       "detail": "exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pa",
-      "gate_id": "G-quarantine",
+      "gate_id": "G-harness",
       "status": "fail"
     }
   ],
   "instructions": [
-    "Fix gate G-quarantine (status fail): exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pa",
-    "Re-run gate G-quarantine locally and confirm it passes."
+    "Fix gate G-harness (status fail): exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: 'stable-fail' != 'insufficient-data' | AssertionError: 'insufficient-data' != 'flaky' | AssertionError: {'verdict': 'insufficient-data', 'pass_rate': None, 's[24 chars]None} != {'verdict': 'stable-fail', 'pa",
+    "Re-run gate G-harness locally and confirm it passes."
   ]
 }
 ```
 
 ## 4. The second attempt
 
-The worker read `packets/T-quarantine.repair.json`, fixed the module and resubmitted. Final verdict: **pass: all required gates green** (round verdicts: ['fail: G-quarantine=fail', 'pass: all required gates green']).
+The worker read `packets/T-quarantine.repair.json`, fixed the module and resubmitted. Final verdict: **fail: G-stdlib-only=fail** (round verdicts: ['fail: G-harness=fail, G-stdlib-only=fail', 'fail: G-stdlib-only=fail']).
 
 ## 5. Deployment, observed by the fleet itself
 
-- ready in 0.066s on port 44781
-- smoke `200`, soak 17 samples / 0 failures, p50 1.72 ms, max 2.163 ms
+- ready in 0.079s on port 36629
+- smoke `200`, soak 17 samples / 0 failures, p50 1.707 ms, max 1.936 ms
 - budget gates: ready <= 10s and p50 <= 50ms both enforced as system gates
 
 ## 6. Fleet accounting
@@ -56,19 +64,19 @@ The worker read `packets/T-quarantine.repair.json`, fixed the module and resubmi
 ```json
 {
   "attempts_total": 2,
-  "critical_path_seconds": 26.745,
+  "critical_path_seconds": 26.887,
   "failed": 0,
-  "gates_failed": 1,
+  "gates_failed": 3,
   "gates_passed": 15,
-  "gates_total": 16,
+  "gates_total": 18,
   "merged": 1,
   "retries": 1,
   "slowest_task": {
     "id": "T-quarantine",
-    "seconds": 26.745
+    "seconds": 26.887
   },
   "tasks": 1,
-  "verdict": "pass: all required gates green"
+  "verdict": "fail: G-stdlib-only=fail"
 }
 ```
 

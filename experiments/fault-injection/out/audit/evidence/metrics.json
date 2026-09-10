@@ -1,9 +1,9 @@
 {
   "deploy_failures": 0.0,
-  "deploy_max_ms": 1.91,
+  "deploy_max_ms": 1.942,
   "deploy_ok": 1.0,
-  "deploy_p50_ms": 1.731,
-  "deploy_ready_seconds": 0.068,
+  "deploy_p50_ms": 1.75,
+  "deploy_ready_seconds": 0.064,
   "deploy_samples": 13.0,
   "deploy_smoke_ms": 23.8,
   "deploy_smoke_status": 200.0

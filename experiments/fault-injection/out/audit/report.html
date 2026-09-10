@@ -37,60 +37,128 @@ footer { padding:18px 28px 40px; color:var(--muted); font-size:12.5px; border-to
 <body>
 <header>
   <h1>MiniFleet run report</h1>
-  <div class='muted'>MiniFleet v0.3: quarantine flaky gates &middot; intent <code>minifleet-v03-quarantine</code> &middot; run <code>20260910T134913Z-minifleet-v03-quarantine-d94998</code></div>
+  <div class='muted'>MiniFleet v0.3: quarantine flaky gates &middot; intent <code>minifleet-v03-quarantine</code> &middot; run <code>20260910T181833Z-minifleet-v03-quarantine-5eea20</code></div>
   <div class='cards'>
-    <div class='card'><div class='k'>Status</div><div class='v'>passed</div></div>
+    <div class='card'><div class='k'>Status</div><div class='v'>failed</div></div>
     <div class='card'><div class='k'>Criteria verified</div><div class='v'>7/7</div></div>
-    <div class='card'><div class='k'>Gates passed</div><div class='v'>15/16</div></div>
+    <div class='card'><div class='k'>Gates passed</div><div class='v'>15/18</div></div>
     <div class='card'><div class='k'>Tasks</div><div class='v'>1</div></div>
     <div class='card'><div class='k'>Plan repairs</div><div class='v'>0</div></div>
   </div>
 </header>
 <main>
   <h2>1. Intent as received</h2>
-  <p>A gate that red-lights an unlucky run teaches people to ignore red, so the fleet needs to tell a flaky gate from a broken one. Add minifleet/quarantine.py: classify a series of gate outcomes as insufficient-data, stable-pass, stable-fail or flaky, and list the gates worth quarantining. Refuse to decide on a sample smaller than the minimum. Do this without breaking the engine, the shipped service, or the deployment path.</p>
-  <h3>Deliverables</h3><ul><li>minifleet/quarantine.py - classify repeated gate outcomes and list flaky gates</li><li>tests/test_quarantine.py - the worker&#x27;s own tests</li><li>the existing engine, service and deployment gates, still green</li></ul>
-  <h3>Constraints</h3><ul><li>Python 3.12 standard library only</li><li>harness/ is frozen: workers may read it, never modify it</li><li>the engine&#x27;s existing behaviour and the shipped linksvc service must be unaffected</li></ul>
+  <p># MiniFleet v0.3: quarantine flaky gates
+
+A gate that red-lights an unlucky run teaches people to ignore red. This intent adds
+flaky-gate quarantine to the engine itself: decide from repeated outcomes whether a gate is
+flaky, and refuse to decide when the sample is too small. It has to be done without breaking
+the engine, the shipped service, or the deployment path - the service answers in well under
+50 ms today and must stay there.
+
+## Deliverables
+
+- minifleet/quarantine.py - classify repeated gate outcomes and list the gates worth quarantining
+- tests/test_quarantine.py - the worker&#x27;s own tests
+
+## Acceptance
+
+- [harness] classify() labels an all-pass series, an all-fail series and a mixed series exactly, with a rounded pass_rate and the sample count
+- [harness] a sample smaller than min_samples - including an empty one - is insufficient-data with a null pass_rate, never a failure verdict
+- [harness] exactly min_samples outcomes are enough to decide: the boundary is inclusive
+- [harness] quarantine() returns only flaky gate ids, sorted ascending, and never quarantines insufficient data
+- [regression] the pre-existing engine suite still passes on the integrated tree
+- [service] the shipped linksvc service still passes its own acceptance harness
+- [deploy] the fleet can still deploy a running system, probe it, and stay inside its latency budget
+
+## Constraints
+
+- Python 3.12 standard library only
+- harness/ is frozen: workers may read it, never modify it
+
+## Out of scope
+
+- automatically re-running gates to collect samples
+- persisting quarantine state between runs
+
+## Budgets
+
+- deploy_ready_seconds &lt;= 10
+- deploy_p50_ms &lt;= 50
+
+## Contract
+
+- minifleet.quarantine.classify: classify(outcomes: list[bool], min_samples: int = 3, flake_threshold: float = 0.5) -&gt; {&quot;verdict&quot;: str, &quot;pass_rate&quot;: float|None, &quot;samples&quot;: int, &quot;dominant&quot;: str|None}
+- minifleet.quarantine.quarantine: quarantine(gates: dict[str, list[bool]], min_samples: int = 3, flake_threshold: float = 0.5) -&gt; list[str]
+
+Insufficient data is not a failure verdict: an empty or too-small sample has pass_rate None and
+no dominant side. The boundary is inclusive, so exactly min_samples outcomes decide.
+
+## Service
+
+- dir: examples/linksvc
+- harness: harness.test_accept
+
+## Deploy
+
+- dir: examples/linksvc
+- cmd: python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-compiled.db --rate 1000 --burst 1000
+- probe: /healthz
+- seconds: 3
+
+## Meta
+
+- id: minifleet-v03-quarantine
+- baseline_from: ..
+- harness_dir: harness-quarantine
+- max_attempts: 3
+- max_rounds: 4
+- max_dispatches: 6
+- max_wall_seconds: 900</p>
+  <h3>Deliverables</h3><ul><li>minifleet/quarantine.py - classify repeated gate outcomes and list the gates worth quarantining</li><li>tests/test_quarantine.py - the worker&#x27;s own tests</li></ul>
+  <h3>Constraints</h3><ul><li>Python 3.12 standard library only</li><li>harness/ is frozen: workers may read it, never modify it</li></ul>
   <h3>Out of scope</h3><ul><li>automatically re-running gates to collect samples</li><li>persisting quarantine state between runs</li></ul>
   <h2>2. Design and task graph</h2>
   <p class='muted'>The architect froze 1 contract(s) and split the work into 1 single-writer tasks before any worker was dispatched.</p>
-  <svg viewBox='0 0 1080 98' width='100%' height='98' role='img' aria-label='task dependency graph'><g><rect x='441' y='6' width='198' height='48' rx='10' fill='#131a23' stroke='#3ddc97' stroke-width='1.5'/><text x='540' y='26' text-anchor='middle' fill='#e8eef5' font-family='ui-sans-serif' font-size='12.5'>T-quarantine</text><text x='540' y='43' text-anchor='middle' fill='#8ba0b4' font-family='ui-sans-serif' font-size='11'>Flaky-gate quarantine</text></g></svg>
+  <svg viewBox='0 0 1080 98' width='100%' height='98' role='img' aria-label='task dependency graph'><g><rect x='441' y='6' width='198' height='48' rx='10' fill='#131a23' stroke='#3ddc97' stroke-width='1.5'/><text x='540' y='26' text-anchor='middle' fill='#e8eef5' font-family='ui-sans-serif' font-size='12.5'>T-quarantine</text><text x='540' y='43' text-anchor='middle' fill='#8ba0b4' font-family='ui-sans-serif' font-size='11'>Quarantine</text></g></svg>
   <table><thead><tr><th>Task</th><th>Depends on</th><th>Write scope</th><th>State</th><th>Files</th></tr></thead>
-  <tbody><tr><td><code>T-quarantine</code><br><span class='muted'>Flaky-gate quarantine</span></td><td>-</td><td><code>minifleet/quarantine.py, tests/test_quarantine.py</code></td><td><span class='pill pass'>merged</span></td><td>1</td></tr></tbody></table>
+  <tbody><tr><td><code>T-quarantine</code><br><span class='muted'>Quarantine</span></td><td>-</td><td><code>minifleet/quarantine.py, tests/test_quarantine.py</code></td><td><span class='pill pass'>merged</span></td><td>1</td></tr></tbody></table>
   <h3>Plan self-repairs</h3><ul><li>No repairs were needed.</li></ul>
   <h2>3. Traceability: intent to evidence</h2>
   <p class='muted'>Every acceptance criterion is tied to the gate that decided its fate. Nothing in this report is asserted without a row here.</p>
   <table><thead><tr><th>Criterion</th><th>Statement</th><th>Owning tasks</th><th>Gate and observation</th></tr></thead>
-  <tbody><tr><td><code>A-1</code><br><span class='pill pass'>verified</span></td><td>classify() labels all-pass as stable-pass, all-fail as stable-fail and mixed outcomes as flaky, with an exact pass_rate and sample count</td><td>T-quarantine</td><td><code>G-quarantine</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
-<tr><td><code>A-2</code><br><span class='pill pass'>verified</span></td><td>A sample smaller than min_samples - including an empty one - is insufficient-data with a null pass_rate, never a verdict</td><td>T-quarantine</td><td><code>G-quarantine</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
-<tr><td><code>A-3</code><br><span class='pill pass'>verified</span></td><td>Exactly min_samples outcomes are enough to decide; the boundary is inclusive</td><td>T-quarantine</td><td><code>G-quarantine</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
-<tr><td><code>A-4</code><br><span class='pill pass'>verified</span></td><td>quarantine() returns only flaky gates, sorted, and never quarantines insufficient data</td><td>T-quarantine</td><td><code>G-quarantine</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
-<tr><td><code>A-5</code><br><span class='pill pass'>verified</span></td><td>The pre-existing engine regression suite still passes on the integrated tree</td><td>-</td><td><code>G-regression</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
-<tr><td><code>A-6</code><br><span class='pill pass'>verified</span></td><td>The shipped linksvc service still passes its own acceptance harness</td><td>-</td><td><code>G-service</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
-<tr><td><code>A-7</code><br><span class='pill pass'>verified</span></td><td>The fleet can still deploy a running system and probe it: ready under 10s, p50 under 50ms</td><td>-</td><td><code>G-deploy</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span><br><code>G-budget-ready</code> <span class='pill pass'>pass</span><br><span class='muted'>deploy_ready_seconds=0.068 &lt;= 10 -&gt; ok</span><br><code>G-budget-p50</code> <span class='pill pass'>pass</span><br><span class='muted'>deploy_p50_ms=1.731 &lt;= 50 -&gt; ok</span></td></tr></tbody></table>
+  <tbody><tr><td><code>A-1</code><br><span class='pill pass'>verified</span></td><td>classify() labels an all-pass series, an all-fail series and a mixed series exactly, with a rounded pass_rate and the sample count</td><td>T-quarantine</td><td><code>G-harness</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-2</code><br><span class='pill pass'>verified</span></td><td>a sample smaller than min_samples - including an empty one - is insufficient-data with a null pass_rate, never a failure verdict</td><td>T-quarantine</td><td><code>G-harness</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-3</code><br><span class='pill pass'>verified</span></td><td>exactly min_samples outcomes are enough to decide: the boundary is inclusive</td><td>T-quarantine</td><td><code>G-harness</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-4</code><br><span class='pill pass'>verified</span></td><td>quarantine() returns only flaky gate ids, sorted ascending, and never quarantines insufficient data</td><td>T-quarantine</td><td><code>G-harness</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-5</code><br><span class='pill pass'>verified</span></td><td>the pre-existing engine suite still passes on the integrated tree</td><td>T-quarantine</td><td><code>G-regression</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-6</code><br><span class='pill pass'>verified</span></td><td>the shipped linksvc service still passes its own acceptance harness</td><td>T-quarantine</td><td><code>G-service</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-7</code><br><span class='pill pass'>verified</span></td><td>the fleet can still deploy a running system, probe it, and stay inside its latency budget</td><td>T-quarantine</td><td><code>G-deploy</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span><br><code>G-budget-deploy-p50-ms</code> <span class='pill pass'>pass</span><br><span class='muted'>deploy_p50_ms=1.75 &lt;= 50 -&gt; ok</span><br><code>G-budget-deploy-ready-seconds</code> <span class='pill pass'>pass</span><br><span class='muted'>deploy_ready_seconds=0.064 &lt;= 10 -&gt; ok</span></td></tr></tbody></table>
   <h2>4. Gate ledger</h2>
   <table><thead><tr><th>Gate</th><th>Status</th><th>Duration</th><th>Metrics</th><th>Detail</th></tr></thead>
-  <tbody><tr><td><code>G-unit</code></td><td><span class='pill pass'>pass</span></td><td>6.82s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
-<tr><td><code>G-quarantine</code></td><td><span class='pill fail'>fail</span></td><td>0.05s</td><td><code></code></td><td class='muted'>exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: &#x27;stable-fail&#x27; != &#x27;insufficient-data&#x27; | AssertionError: &#x27;insufficient-data&#x27; != &#x27;flaky&#x27; | AssertionError: {&#x27;verdict&#x27;: &#x27;insuffi</td></tr>
-<tr><td><code>G-regression</code></td><td><span class='pill pass'>pass</span></td><td>7.35s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+  <tbody><tr><td><code>G-unit</code></td><td><span class='pill pass'>pass</span></td><td>7.36s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-harness</code></td><td><span class='pill fail'>fail</span></td><td>0.05s</td><td><code></code></td><td class='muted'>exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: &#x27;stable-fail&#x27; != &#x27;insufficient-data&#x27; | AssertionError: &#x27;insufficient-data&#x27; != &#x27;flaky&#x27; | AssertionError: {&#x27;verdict&#x27;: &#x27;insuffi</td></tr>
+<tr><td><code>G-service</code></td><td><span class='pill pass'>pass</span></td><td>1.70s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-stdlib-only</code></td><td><span class='pill fail'>fail</span></td><td>0.09s</td><td><code></code></td><td class='muted'>exit=1 (expected [0]): stdlib-only: 1 violation(s) | - minifleet/intent.py: imports &#x27;yaml&#x27;, which is not in the standard library</td></tr>
+<tr><td><code>G-regression</code></td><td><span class='pill pass'>pass</span></td><td>7.31s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-deploy</code></td><td><span class='pill pass'>pass</span></td><td>3.36s</td><td><code>{&quot;deploy_ok&quot;: 1.0, &quot;deploy_ready_seconds&quot;: 0.068, &quot;deploy_smoke_ms&quot;: 22.5, &quot;deploy_smoke_status&quot;: 200.0, &quot;deploy_p50_ms&quot;: 1.602, &quot;deploy_max_ms&quot;: 1.771, &quot;deploy_samples&quot;: 13.0, &quot;deploy_failures&quot;: 0.0}</code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-layout</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code></code></td><td class='muted'>all paths satisfied: [&#x27;minifleet/quarantine.py&#x27;, &#x27;tests/test_quarantine.py&#x27;]</td></tr>
+<tr><td><code>G-budget-deploy-ready-seconds</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;deploy_ready_seconds&quot;: 0.068}</code></td><td class='muted'>deploy_ready_seconds=0.068 &lt;= 10 -&gt; ok</td></tr>
+<tr><td><code>G-budget-deploy-p50-ms</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;deploy_p50_ms&quot;: 1.602}</code></td><td class='muted'>deploy_p50_ms=1.602 &lt;= 50 -&gt; ok</td></tr>
+<tr><td><code>G-unit</code></td><td><span class='pill pass'>pass</span></td><td>6.78s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-harness</code></td><td><span class='pill pass'>pass</span></td><td>0.05s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
 <tr><td><code>G-service</code></td><td><span class='pill pass'>pass</span></td><td>1.61s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
-<tr><td><code>G-deploy</code></td><td><span class='pill pass'>pass</span></td><td>3.36s</td><td><code>{&quot;deploy_ok&quot;: 1.0, &quot;deploy_ready_seconds&quot;: 0.068, &quot;deploy_smoke_ms&quot;: 23.9, &quot;deploy_smoke_status&quot;: 200.0, &quot;deploy_p50_ms&quot;: 1.704, &quot;deploy_max_ms&quot;: 2.022, &quot;deploy_samples&quot;: 13.0, &quot;deploy_failures&quot;: 0.0}</code></td><td class='muted'>exit=0 (expected [0])</td></tr>
-<tr><td><code>G-layout</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code></code></td><td class='muted'>all paths satisfied: [&#x27;minifleet/quarantine.py&#x27;, &#x27;ACCEPTANCE.md&#x27;]</td></tr>
-<tr><td><code>G-budget-ready</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;deploy_ready_seconds&quot;: 0.068}</code></td><td class='muted'>deploy_ready_seconds=0.068 &lt;= 10 -&gt; ok</td></tr>
-<tr><td><code>G-budget-p50</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;deploy_p50_ms&quot;: 1.704}</code></td><td class='muted'>deploy_p50_ms=1.704 &lt;= 50 -&gt; ok</td></tr>
-<tr><td><code>G-unit</code></td><td><span class='pill pass'>pass</span></td><td>7.33s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
-<tr><td><code>G-quarantine</code></td><td><span class='pill pass'>pass</span></td><td>0.05s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
-<tr><td><code>G-regression</code></td><td><span class='pill pass'>pass</span></td><td>7.36s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
-<tr><td><code>G-service</code></td><td><span class='pill pass'>pass</span></td><td>1.62s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
-<tr><td><code>G-deploy</code></td><td><span class='pill pass'>pass</span></td><td>3.37s</td><td><code>{&quot;deploy_ok&quot;: 1.0, &quot;deploy_ready_seconds&quot;: 0.068, &quot;deploy_smoke_ms&quot;: 23.8, &quot;deploy_smoke_status&quot;: 200.0, &quot;deploy_p50_ms&quot;: 1.731, &quot;deploy_max_ms&quot;: 1.91, &quot;deploy_samples&quot;: 13.0, &quot;deploy_failures&quot;: 0.0}</code></td><td class='muted'>exit=0 (expected [0])</td></tr>
-<tr><td><code>G-layout</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code></code></td><td class='muted'>all paths satisfied: [&#x27;minifleet/quarantine.py&#x27;, &#x27;ACCEPTANCE.md&#x27;]</td></tr>
-<tr><td><code>G-budget-ready</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;deploy_ready_seconds&quot;: 0.068}</code></td><td class='muted'>deploy_ready_seconds=0.068 &lt;= 10 -&gt; ok</td></tr>
-<tr><td><code>G-budget-p50</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;deploy_p50_ms&quot;: 1.731}</code></td><td class='muted'>deploy_p50_ms=1.731 &lt;= 50 -&gt; ok</td></tr></tbody></table>
+<tr><td><code>G-stdlib-only</code></td><td><span class='pill fail'>fail</span></td><td>0.08s</td><td><code></code></td><td class='muted'>exit=1 (expected [0]): stdlib-only: 1 violation(s) | - minifleet/intent.py: imports &#x27;yaml&#x27;, which is not in the standard library</td></tr>
+<tr><td><code>G-regression</code></td><td><span class='pill pass'>pass</span></td><td>6.69s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-deploy</code></td><td><span class='pill pass'>pass</span></td><td>3.36s</td><td><code>{&quot;deploy_ok&quot;: 1.0, &quot;deploy_ready_seconds&quot;: 0.064, &quot;deploy_smoke_ms&quot;: 23.8, &quot;deploy_smoke_status&quot;: 200.0, &quot;deploy_p50_ms&quot;: 1.75, &quot;deploy_max_ms&quot;: 1.942, &quot;deploy_samples&quot;: 13.0, &quot;deploy_failures&quot;: 0.0}</code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-layout</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code></code></td><td class='muted'>all paths satisfied: [&#x27;minifleet/quarantine.py&#x27;, &#x27;tests/test_quarantine.py&#x27;]</td></tr>
+<tr><td><code>G-budget-deploy-ready-seconds</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;deploy_ready_seconds&quot;: 0.064}</code></td><td class='muted'>deploy_ready_seconds=0.064 &lt;= 10 -&gt; ok</td></tr>
+<tr><td><code>G-budget-deploy-p50-ms</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;deploy_p50_ms&quot;: 1.75}</code></td><td class='muted'>deploy_p50_ms=1.75 &lt;= 50 -&gt; ok</td></tr></tbody></table>
   <h2>5. Not proven</h2>
   <ul><li>Every acceptance criterion carries passing evidence from a gate.</li></ul>
   <h2>6. Risks and architect decisions</h2>
-  <h3>Risks carried forward</h3><ul><li>None recorded.</li></ul>
-  <h3>Decisions</h3><ul><li>acceptance criteria are owned by the verification layer, never by the worker that writes the code</li><li>every task has a single writer and a disjoint write scope; concurrency without ownership is a merge queue</li><li>frozen contracts: C-V03</li></ul>
+  <h3>Risks carried forward</h3><ul><li>non-functional criteria are only as trustworthy as the measurement harness</li></ul>
+  <h3>Decisions</h3><ul><li>acceptance criteria are owned by the verification layer, never by the worker that writes the code</li><li>every task has a single writer and a disjoint write scope; concurrency without ownership is a merge queue</li><li>frozen contracts: C-1</li></ul>
 </main>
 <footer>Generated by MiniFleet from the run ledger - no claim in this report exists without gate evidence.</footer>
 </body></html>

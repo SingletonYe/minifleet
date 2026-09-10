@@ -191,14 +191,19 @@ def _owner_for_test(test_path: str, components: list[Component]) -> Component | 
 
 
 def policy_gates(constraints: list[str], roots: list[str], network_allow: list[str],
-                 notes: list[str]) -> list[dict[str, Any]]:
+                 stdlib_allow: list[str], notes: list[str]) -> list[dict[str, Any]]:
     """Turn constraints phrased in prose into gates that actually check them."""
 
     gates: list[dict[str, Any]] = []
     joined = " ".join(constraints).lower()
     if roots and ("standard library" in joined or "third-party" in joined or "third party" in joined):
-        gates.append(gatelib.stdlib_only(roots, project=roots))
+        gates.append(gatelib.stdlib_only(roots, allow=stdlib_allow, project=roots))
         notes.append(f"'standard library only' became an enforced import gate over {', '.join(roots)}")
+        if stdlib_allow:
+            notes.append(
+                "declared exceptions to that gate: " + ", ".join(stdlib_allow)
+                + " (an exception belongs in the intent, never in the checker)"
+            )
     if "no network" in joined or "offline" in joined:
         gates.append(gatelib.no_network(roots, allow=network_allow))
         notes.append("'no network in library code' became an enforced import gate")
@@ -272,7 +277,15 @@ def compile_document(text: str) -> Compilation:
         gates.append(gatelib.frozen_harness(module, attributed_to=sorted(known)))
     if service.get("dir"):
         gates.append(gatelib.service_harness(service["dir"], service.get("harness", "harness.test_accept")))
-    gates.extend(policy_gates(constraints, roots, split_list(meta.get("network_allow")), notes))
+    gates.extend(
+        policy_gates(
+            constraints,
+            roots,
+            split_list(meta.get("network_allow")),
+            split_list(meta.get("stdlib_allow")),
+            notes,
+        )
+    )
     gates.append(gatelib.regression())
     gates.extend(probes)
     if deploy.get("cmd"):

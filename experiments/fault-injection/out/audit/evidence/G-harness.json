@@ -3,15 +3,15 @@
   "evidence": {
     "artifacts": [],
     "detail": "exit=0 (expected [0])",
-    "duration_s": 0.04829668998718262,
+    "duration_s": 0.0473477840423584,
     "exit_code": 0,
-    "gate_id": "G-quarantine",
+    "gate_id": "G-harness",
     "metrics": {},
     "output_tail": "\ntest_a_sample_smaller_than_the_minimum_is_insufficient_data (harness.test_quarantine.ClassifyTest.test_a_sample_smaller_than_the_minimum_is_insufficient_data) ... ok\ntest_dominance_follows_the_flake_threshold (harness.test_quarantine.ClassifyTest.test_dominance_follows_the_flake_threshold) ... ok\ntest_empty_outcomes_are_insufficient_data_not_a_failure (harness.test_quarantine.ClassifyTest.test_empty_outcomes_are_insufficient_data_not_a_failure) ... ok\ntest_exactly_min_samples_is_enough_to_decide (harness.test_quarantine.ClassifyTest.test_exactly_min_samples_is_enough_to_decide) ... ok\ntest_mixed_outcomes_are_flaky (harness.test_quarantine.ClassifyTest.test_mixed_outcomes_are_flaky) ... ok\ntest_stable_fail (harness.test_quarantine.ClassifyTest.test_stable_fail) ... ok\ntest_stable_pass (harness.test_quarantine.ClassifyTest.test_stable_pass) ... ok\ntest_insufficient_data_is_never_quarantined (harness.test_quarantine.QuarantineTest.test_insufficient_data_is_never_quarantined) ... ok\ntest_only_flaky_gates_are_quarantined_and_sorted (harness.test_quarantine.QuarantineTest.test_only_flaky_gates_are_quarantined_and_sorted) ... ok\ntest_quarantine_accepts_the_same_thresholds (harness.test_quarantine.QuarantineTest.test_quarantine_accepts_the_same_thresholds) ... ok\n\n----------------------------------------------------------------------\nRan 10 tests in 0.001s\n\nOK\n",
-    "recorded_at": 1789048180.2316208,
+    "recorded_at": 1789064341.2156422,
     "status": "pass",
     "task_id": ""
   },
-  "gate": "G-quarantine",
-  "title": "frozen quarantine contract"
+  "gate": "G-harness",
+  "title": "frozen acceptance harness (harness.test_quarantine)"
 }

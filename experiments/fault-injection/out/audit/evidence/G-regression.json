@@ -3,15 +3,15 @@
   "evidence": {
     "artifacts": [],
     "detail": "exit=0 (expected [0])",
-    "duration_s": 7.358583927154541,
+    "duration_s": 6.692118883132935,
     "exit_code": 0,
     "gate_id": "G-regression",
     "metrics": {},
-    "output_tail": "\n............................................................\n----------------------------------------------------------------------\nRan 60 tests in 7.251s\n\nOK\n",
-    "recorded_at": 1789048187.5905025,
+    "output_tail": "\n............................................................................\n----------------------------------------------------------------------\nRan 76 tests in 6.573s\n\nOK\n",
+    "recorded_at": 1789064349.5998802,
     "status": "pass",
     "task_id": ""
   },
   "gate": "G-regression",
-  "title": "engine regression on the integrated tree"
+  "title": "regression suite on the integrated tree"
 }

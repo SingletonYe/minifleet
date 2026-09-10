@@ -7,7 +7,7 @@
     "minifleet/quarantine.py",
     "tests/test_quarantine.py"
   ],
-  "notes": "attempt 2: read T-quarantine.repair.json; the fleet attributed attempt 1/3 failed 1 gate(s): G-quarantine to this task; fixing G-quarantine",
+  "notes": "attempt 2: read T-quarantine.repair.json; the fleet attributed attempt 1/3 failed 1 gate(s): G-harness to this task; fixing G-harness",
   "status": "submitted",
   "task_id": "T-quarantine"
 }

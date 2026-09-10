@@ -1,25 +1,62 @@
 
-$ minifleet plan --intent /home/user/workspace/minifleet/intents/quarantine.json --runs-dir /home/user/workspace/minifleet/experiments/fault-injection/runs   (0.2s, exit 0)
-baseline : brownfield from /home/user/workspace/minifleet [git-revision] 123 files @ 7d45fc34eabdd97063637ab06d0cab4520936ac3
-run      : 20260910T134913Z-minifleet-v03-quarantine-d94998
-run dir  : /home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998
-tasks    : 1  gates: 8  contracts: 1
+$ minifleet compile --text /home/user/workspace/minifleet/intents/quarantine.md --out /home/user/workspace/minifleet/intents/quarantine.compiled.json   (0.1s, exit 0)
+intent   : minifleet-v03-quarantine - MiniFleet v0.3: quarantine flaky gates
+backend  : rules
+derived  : 1 component(s), 7 acceptance criteria, 9 gate(s), 2 budget(s)
+
+components and write scopes:
+  quarantine    minifleet/quarantine.py, tests/test_quarantine.py
+
+gates:
+  G-unit                          cmd     task    python3 -m unittest discover -s tests -v
+  G-harness                       cmd     system  python3 -m unittest harness.test_quarantine -v
+  G-service                       cmd     system  cd examples/linksvc && python3 -m unittest harness.test_accept -
+  G-stdlib-only                   cmd     system  python3 -m minifleet.checks stdlib-only --roots minifleet --proj
+  G-regression                    cmd     system  python3 -m unittest discover -s tests
+  G-deploy                        cmd     system  python3 -m minifleet deploy --dir examples/linksvc --cmd "python
+  G-budget-deploy-ready-seconds   budget  system  deploy_ready_seconds
+  G-budget-deploy-p50-ms          budget  system  deploy_p50_ms
+  G-layout                        files   system  minifleet/quarantine.py, tests/test_quarantine.py
+
+acceptance criteria:
+  A-1   [functional] -> G-harness                   classify() labels an all-pass series, an all-fail series and
+  A-2   [functional] -> G-harness                   a sample smaller than min_samples - including an empty one -
+  A-3   [functional] -> G-harness                   exactly min_samples outcomes are enough to decide: the bound
+  A-4   [functional] -> G-harness                   quarantine() returns only flaky gate ids, sorted ascending, 
+  A-5   [functional] -> G-regression                the pre-existing engine suite still passes on the integrated
+  A-6   [functional] -> G-service                   the shipped linksvc service still passes its own acceptance 
+  A-7   [nfr       ] -> G-deploy, G-budget-deploy-p50-ms, G-budget-deploy-ready-secondsthe fleet can still deploy a running system, probe it, and s
+
+what the compiler decided for you:
+  - 'standard library only' became an enforced import gate over minifleet
+  - prose suggested budgets latency_under_ms=50; declare them under '## Budgets' to have them enforced
+
+written  : /home/user/workspace/minifleet/intents/quarantine.compiled.json
+
+
+$ minifleet plan --intent /home/user/workspace/minifleet/intents/quarantine.compiled.json --runs-dir /home/user/workspace/minifleet/experiments/fault-injection/runs   (0.4s, exit 0)
+baseline : brownfield from /home/user/workspace/minifleet [git-revision] 148 files @ 181becc021eb083cf1bee6b9a625cf53bd97e7e4 (working copy was dirty)
+run      : 20260910T181833Z-minifleet-v03-quarantine-5eea20
+run dir  : /home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T181833Z-minifleet-v03-quarantine-5eea20
+tasks    : 1  gates: 9  contracts: 1
 ready    : T-quarantine
 
 
-$ minifleet autopilot --run /home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998 --dispatcher command:/usr/bin/python3 /home/user/workspace/minifleet/experiments/fault-injection/workers/worker.py --max-attempts 3 --max-rounds 4   (39.3s, exit 0)
+$ minifleet autopilot --run /home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T181833Z-minifleet-v03-quarantine-5eea20 --dispatcher command:/usr/bin/python3 /home/user/workspace/minifleet/experiments/fault-injection/workers/worker.py --max-attempts 3 --max-rounds 4   (38.8s, exit 1)
 --- round 1: dispatch ---
   T-quarantine      verified  {'G-unit': 'pass'}
-  verify: fail: G-quarantine=fail
+  verify: fail: G-harness=fail, G-stdlib-only=fail
   repair: reopened=[] escalated=[] ready=['T-quarantine']
 --- round 2: dispatch ---
   T-quarantine      verified  {'G-unit': 'pass'}
-  verify: pass: all required gates green
+  verify: fail: G-stdlib-only=fail
+  repair: reopened=[] escalated=[] ready=[]
+  nothing dispatchable left; stopping
 
-status : passed
-verdict: pass: all required gates green
+status : failed
+verdict: fail: G-stdlib-only=fail
 rounds : 2
-report : /home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/report.html
+report : /home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T181833Z-minifleet-v03-quarantine-5eea20/report.html
 
 
 $ minifleet deploy --dir examples/linksvc --cmd python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-experiment.db --rate 1000 --burst 1000 --probe /healthz --seconds 4 --emit-metrics   (4.4s, exit 0)
@@ -30,49 +67,49 @@ $ minifleet deploy --dir examples/linksvc --cmd python3 -m linksvc --host 127.0.
   "ok": true,
   "probe": "/healthz",
   "ready": {
-    "port": 44781,
+    "port": 36629,
     "ready": true,
-    "seconds": 0.066,
-    "stdout_tail": "MINIFLEET_READY {\"port\": 44781}\n{\"burst\": 1000, \"db\": \"/tmp/minifleet-experiment.db\", \"event\": \"listening\", \"host\": \"127.0.0.1\", \"level\": \"info\", \"port\": 44781, \"rate\": 1000.0, \"ts\": 1789048192.758611}"
+    "seconds": 0.079,
+    "stdout_tail": "MINIFLEET_READY {\"port\": 36629}\n{\"burst\": 1000, \"db\": \"/tmp/minifleet-experiment.db\", \"event\": \"listening\", \"host\": \"127.0.0.1\", \"level\": \"info\", \"port\": 36629, \"rate\": 1000.0, \"ts\": 1789064353.149288}"
   },
   "smoke": {
     "ok": true,
-    "seconds": 0.0244,
+    "seconds": 0.0242,
     "status": 200
   },
   "soak": {
     "failures": 0,
-    "max_ms": 2.163,
+    "max_ms": 1.936,
     "ok": true,
-    "p50_ms": 1.72,
+    "p50_ms": 1.707,
     "samples": 17
   },
-  "url": "http://127.0.0.1:44781/healthz"
+  "url": "http://127.0.0.1:36629/healthz"
 }
 MINIFLEET_METRIC {"name": "deploy_ok", "value": 1.0}
-MINIFLEET_METRIC {"name": "deploy_ready_seconds", "value": 0.066}
-MINIFLEET_METRIC {"name": "deploy_smoke_ms", "value": 24.4}
+MINIFLEET_METRIC {"name": "deploy_ready_seconds", "value": 0.079}
+MINIFLEET_METRIC {"name": "deploy_smoke_ms", "value": 24.2}
 MINIFLEET_METRIC {"name": "deploy_smoke_status", "value": 200.0}
-MINIFLEET_METRIC {"name": "deploy_p50_ms", "value": 1.72}
-MINIFLEET_METRIC {"name": "deploy_max_ms", "value": 2.163}
+MINIFLEET_METRIC {"name": "deploy_p50_ms", "value": 1.707}
+MINIFLEET_METRIC {"name": "deploy_max_ms", "value": 1.936}
 MINIFLEET_METRIC {"name": "deploy_samples", "value": 17.0}
 MINIFLEET_METRIC {"name": "deploy_failures", "value": 0.0}
 
 
-$ minifleet fleetmetrics --run /home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998   (0.1s, exit 0)
+$ minifleet fleetmetrics --run /home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T181833Z-minifleet-v03-quarantine-5eea20   (0.1s, exit 0)
 {
   "attempts_total": 2,
-  "critical_path_seconds": 26.745,
+  "critical_path_seconds": 26.887,
   "failed": 0,
-  "gates_failed": 1,
+  "gates_failed": 3,
   "gates_passed": 15,
-  "gates_total": 16,
+  "gates_total": 18,
   "merged": 1,
   "retries": 1,
   "slowest_task": {
     "id": "T-quarantine",
-    "seconds": 26.745
+    "seconds": 26.887
   },
   "tasks": 1,
-  "verdict": "pass: all required gates green"
+  "verdict": "fail: G-stdlib-only=fail"
 }

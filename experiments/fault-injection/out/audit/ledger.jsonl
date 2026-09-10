@@ -1,17 +1,19 @@
-{"dispatcher": "packet", "event": "run.created", "intent": "minifleet-v03-quarantine", "t": 1789048153.1754646}
-{"dirty": false, "event": "baseline.adopted", "files": 123, "mode": "git-revision", "revision": "7d45fc34eabdd97063637ab06d0cab4520936ac3", "source": "/home/user/workspace/minifleet", "t": 1789048153.2034328}
-{"event": "tasks.ready", "t": 1789048153.25225, "tasks": ["T-quarantine"]}
-{"event": "plan.complete", "gates": 8, "t": 1789048153.284805, "tasks": 1}
-{"dispatcher": "command", "event": "tasks.dispatched", "t": 1789048153.4027278, "tasks": ["T-quarantine"]}
-{"commit": "02ba8ae2d4dea67512628f45bea15d3b962bdec0", "event": "task.submitted", "files": ["minifleet/quarantine.py", "tests/test_quarantine.py"], "notes": "", "t": 1789048153.4701326, "task": "T-quarantine", "worker": "/usr/bin/python3 /home/user/workspace/minifleet/experiments/fault-injection/workers/worker.py"}
-{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789048160.2941728, "task": "T-quarantine"}
-{"branch": "task/quarantine", "event": "task.merged", "t": 1789048160.324294, "task": "T-quarantine"}
-{"attempt": 1, "brief": "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T134913Z-minifleet-v03-quarantine-d94998/packets/T-quarantine.repair.json", "escalate": false, "event": "system.attributed", "gate": "G-quarantine", "t": 1789048172.708936, "task": "T-quarantine"}
-{"event": "tasks.ready", "t": 1789048172.7090502, "tasks": ["T-quarantine"]}
-{"event": "system.verified", "gates": {"G-budget-p50": "pass", "G-budget-ready": "pass", "G-deploy": "pass", "G-layout": "pass", "G-quarantine": "fail", "G-regression": "pass", "G-service": "pass"}, "reopened": ["T-quarantine"], "t": 1789048172.7155464, "unattributed": [], "verdict": "fail: G-quarantine=fail"}
-{"dispatcher": "command", "event": "tasks.dispatched", "t": 1789048172.7565956, "tasks": ["T-quarantine"]}
-{"commit": "a1a80c61d23d23863c714989fd7956ca5b5f2566", "event": "task.submitted", "files": ["minifleet/quarantine.py"], "notes": "", "t": 1789048172.8176112, "task": "T-quarantine", "worker": "/usr/bin/python3 /home/user/workspace/minifleet/experiments/fault-injection/workers/worker.py"}
-{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789048180.1480277, "task": "T-quarantine"}
-{"branch": "task/quarantine-a2", "event": "task.merged", "t": 1789048180.1772761, "task": "T-quarantine"}
-{"event": "system.verified", "gates": {"G-budget-p50": "pass", "G-budget-ready": "pass", "G-deploy": "pass", "G-layout": "pass", "G-quarantine": "pass", "G-regression": "pass", "G-service": "pass"}, "reopened": [], "t": 1789048192.5867126, "unattributed": [], "verdict": "pass: all required gates green"}
-{"event": "autopilot.finished", "rounds": 2, "status": "passed", "t": 1789048192.5969427, "verdict": "pass: all required gates green"}
+{"dispatcher": "packet", "event": "run.created", "intent": "minifleet-v03-quarantine", "t": 1789064313.855782}
+{"dirty": true, "event": "baseline.adopted", "files": 148, "mode": "git-revision", "revision": "181becc021eb083cf1bee6b9a625cf53bd97e7e4", "source": "/home/user/workspace/minifleet", "t": 1789064314.0166726}
+{"event": "tasks.ready", "t": 1789064314.0813067, "tasks": ["T-quarantine"]}
+{"event": "plan.complete", "gates": 9, "t": 1789064314.1206803, "tasks": 1}
+{"dispatcher": "command", "event": "tasks.dispatched", "t": 1789064314.244739, "tasks": ["T-quarantine"]}
+{"commit": "17b60a734680b7ca4c7f833cc85bb1b5c724c9cc", "event": "task.submitted", "files": ["minifleet/quarantine.py", "tests/test_quarantine.py"], "notes": "", "t": 1789064314.315799, "task": "T-quarantine", "worker": "/usr/bin/python3 /home/user/workspace/minifleet/experiments/fault-injection/workers/worker.py"}
+{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789064321.6746566, "task": "T-quarantine"}
+{"branch": "task/quarantine", "event": "task.merged", "t": 1789064321.706288, "task": "T-quarantine"}
+{"attempt": 1, "brief": "/home/user/workspace/minifleet/experiments/fault-injection/runs/20260910T181833Z-minifleet-v03-quarantine-5eea20/packets/T-quarantine.repair.json", "escalate": false, "event": "system.attributed", "gate": "G-harness", "t": 1789064334.2326112, "task": "T-quarantine"}
+{"event": "system.unattributed", "gates": ["G-stdlib-only"], "t": 1789064334.2326772}
+{"event": "tasks.ready", "t": 1789064334.2327168, "tasks": ["T-quarantine"]}
+{"event": "system.verified", "gates": {"G-budget-deploy-p50-ms": "pass", "G-budget-deploy-ready-seconds": "pass", "G-deploy": "pass", "G-harness": "fail", "G-layout": "pass", "G-regression": "pass", "G-service": "pass", "G-stdlib-only": "fail"}, "reopened": ["T-quarantine"], "t": 1789064334.2391403, "unattributed": ["G-stdlib-only"], "verdict": "fail: G-harness=fail, G-stdlib-only=fail"}
+{"dispatcher": "command", "event": "tasks.dispatched", "t": 1789064334.2829466, "tasks": ["T-quarantine"]}
+{"commit": "f22e88a20215428d5a0eb3175989be775a7e67d4", "event": "task.submitted", "files": ["minifleet/quarantine.py"], "notes": "", "t": 1789064334.347686, "task": "T-quarantine", "worker": "/usr/bin/python3 /home/user/workspace/minifleet/experiments/fault-injection/workers/worker.py"}
+{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789064341.1331282, "task": "T-quarantine"}
+{"branch": "task/quarantine-a2", "event": "task.merged", "t": 1789064341.162094, "task": "T-quarantine"}
+{"event": "system.unattributed", "gates": ["G-stdlib-only"], "t": 1789064352.9649017}
+{"event": "system.verified", "gates": {"G-budget-deploy-p50-ms": "pass", "G-budget-deploy-ready-seconds": "pass", "G-deploy": "pass", "G-harness": "pass", "G-layout": "pass", "G-regression": "pass", "G-service": "pass", "G-stdlib-only": "fail"}, "reopened": [], "t": 1789064352.969072, "unattributed": ["G-stdlib-only"], "verdict": "fail: G-stdlib-only=fail"}
+{"budget_exhausted": "", "event": "autopilot.finished", "rounds": 2, "seconds": 38.742, "status": "failed", "t": 1789064352.973011, "verdict": "fail: G-stdlib-only=fail"}

@@ -1,0 +1,17 @@
+{
+  "cmd": "python3 -m minifleet.checks stdlib-only --roots minifleet --project minifleet",
+  "evidence": {
+    "artifacts": [],
+    "detail": "exit=1 (expected [0]): stdlib-only: 1 violation(s) | - minifleet/intent.py: imports 'yaml', which is not in the standard library",
+    "duration_s": 0.0820472240447998,
+    "exit_code": 1,
+    "gate_id": "G-stdlib-only",
+    "metrics": {},
+    "output_tail": "stdlib-only: 1 violation(s)\n  - minifleet/intent.py: imports 'yaml', which is not in the standard library\n",
+    "recorded_at": 1789064342.9073875,
+    "status": "fail",
+    "task_id": ""
+  },
+  "gate": "G-stdlib-only",
+  "title": "no third-party imports"
+}
