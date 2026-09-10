@@ -89,7 +89,9 @@ actually produced and admitted, and [`evidence/linksvc-run/`](evidence/linksvc-r
 record of that run - the frozen packets handed to each worker, the per-gate evidence, the
 append-only ledger and the generated report.
 
-The rendered report is published at <https://minifleet-run-report.okou.app>.
+The rendered report is published at
+<https://singletonye.github.io/minifleet/> (mirror: <https://minifleet-run-report.okou.app>),
+and its source is in [`docs/`](docs/).
 
 | what the fleet did | where it is recorded |
 | --- | --- |
