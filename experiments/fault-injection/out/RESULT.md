@@ -1,6 +1,6 @@
 # Injected-fault experiment: does the repair loop actually close?
 
-Run `20260910T134648Z-minifleet-v03-quarantine-7d8c23` for intent `minifleet-v03-quarantine`, executed by `minifleet autopilot` against the engine's own repository.
+Run `20260910T134730Z-minifleet-v03-quarantine-66cd00` for intent `minifleet-v03-quarantine`, executed by `minifleet autopilot` against the engine's own repository.
 
 ## 1. The injected defect
 
@@ -43,32 +43,32 @@ The repair packet the fleet handed to the next attempt:
 
 ## 4. The second attempt
 
-The worker read `packets/T-quarantine.repair.json`, fixed the module and resubmitted. Final verdict: **fail: G-quarantine=fail** (round verdicts: ['fail: G-quarantine=fail']).
+The worker read `packets/T-quarantine.repair.json`, fixed the module and resubmitted. Final verdict: **pass: all required gates green** (round verdicts: ['fail: G-quarantine=fail', 'pass: all required gates green']).
 
 ## 5. Deployment, observed by the fleet itself
 
-- ready in 0.066s on port 46433
-- smoke `200`, soak 17 samples / 0 failures, p50 1.764 ms, max 1.973 ms
+- ready in 0.06s on port 34019
+- smoke `200`, soak 17 samples / 0 failures, p50 1.764 ms, max 2.233 ms
 - budget gates: ready <= 10s and p50 <= 50ms both enforced as system gates
 
 ## 6. Fleet accounting
 
 ```json
 {
-  "attempts_total": 1,
-  "critical_path_seconds": 7.343,
+  "attempts_total": 2,
+  "critical_path_seconds": 26.639,
   "failed": 0,
   "gates_failed": 1,
-  "gates_passed": 7,
-  "gates_total": 8,
-  "merged": 0,
-  "retries": 0,
+  "gates_passed": 15,
+  "gates_total": 16,
+  "merged": 1,
+  "retries": 1,
   "slowest_task": {
     "id": "T-quarantine",
-    "seconds": 7.343
+    "seconds": 26.639
   },
   "tasks": 1,
-  "verdict": "fail: G-quarantine=fail"
+  "verdict": "pass: all required gates green"
 }
 ```
 

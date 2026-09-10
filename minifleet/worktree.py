@@ -136,6 +136,13 @@ class Repo:
 
         if not self.branch_exists(current):
             return current
+        if git(["rev-parse", current], self.path).stdout.strip() == git(
+            ["rev-parse", base], self.path
+        ).stdout.strip():
+            # The branch is still sitting exactly on the baseline - nothing has
+            # been merged from it yet, so it is the *first* attempt, not a spent
+            # one. Reusing it keeps the branch name and the attempt number aligned.
+            return current
         if not self.is_ancestor(current, base):
             return current
         attempt = 2
