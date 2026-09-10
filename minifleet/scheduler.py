@@ -54,6 +54,12 @@ class Scheduler:
                 return gate
         raise KeyError(gate_id)
 
+    def gate_or_none(self, gate_id: str) -> Gate | None:
+        for gate in self.design.gates:
+            if gate.id == gate_id:
+                return gate
+        return None
+
     def task_gates(self, task: Task) -> list[Gate]:
         return [g for g in self.design.gates if g.id in task.gate_ids]
 
@@ -202,7 +208,7 @@ class Scheduler:
             brief = self.write_repair_packet(task_id)
             ledger.append(
                 self.run, self.run_dir, "task.repair_packet",
-                task=task_id, attempt=task.attempts, path=str(brief),
+                task=task_id, attempt=task.attempts, brief=str(brief),
                 escalate=bool(json.loads(brief.read_text())["escalate"]),
             )
         return {
@@ -225,6 +231,59 @@ class Scheduler:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(packet, indent=2, sort_keys=True))
         return path
+
+    def repair_failed(self, max_attempts: int = 3) -> dict[str, Any]:
+        """Reopen every task that is currently failing, bounded by the attempt budget.
+
+        Two failure shapes are covered: a task whose own gates failed, and a
+        system gate that runs on the integrated tree and declares which component
+        it implicates. The second is what makes a code-level defect repairable -
+        without attribution a red system gate can only be reported, not fixed.
+        """
+
+        reopened: list[str] = []
+        escalated: list[str] = []
+        for task in self.design.tasks:
+            if task.state != TaskState.FAILED.value:
+                continue
+            if task.worktree:
+                self.repo.remove_worktree(task.worktree)
+                task.worktree = ""
+            brief = self.write_repair_packet(task.id, max_attempts=max_attempts)
+            packet = json.loads(brief.read_text())
+            if packet.get("escalate"):
+                escalated.append(task.id)
+                ledger.append(
+                    self.run, self.run_dir, "task.escalated",
+                    task=task.id, attempt=task.attempts, brief=str(brief),
+                )
+                continue
+            task.state = TaskState.PENDING.value
+            reopened.append(task.id)
+            ledger.append(
+                self.run, self.run_dir, "task.reopened",
+                task=task.id, attempt=task.attempts, brief=str(brief),
+            )
+
+        attribution = {"reopened": [], "escalated": [], "unattributed": []}
+        needs_attribution = bool(self.run.verdict) and not self.run.verdict.startswith("pass")
+        if needs_attribution:
+            latest: dict[str, dict[str, Any]] = {}
+            for row in self.run.evidence:
+                latest[str(row.get("gate_id"))] = row
+            failing = [
+                Evidence.from_dict(row) for row in latest.values() if row.get("status") != "pass"
+            ]
+            if failing:
+                attribution = self.attribute_failures(failing, required=None, max_attempts=max_attempts)
+
+        self.refresh()
+        self.persist()
+        return {
+            "reopened": sorted(set(reopened) | set(attribution["reopened"])),
+            "escalated": sorted(set(escalated) | set(attribution["escalated"])),
+            "unattributed": attribution["unattributed"],
+        }
 
     # -- integration -----------------------------------------------------
     def integrate(self) -> dict[str, Any]:
@@ -269,7 +328,7 @@ class Scheduler:
         return {"status": "ok", "merged": merged, "head": repo.head()}
 
     # -- system verification ---------------------------------------------
-    def verify(self) -> dict[str, Any]:
+    def verify(self, max_attempts: int = 3) -> dict[str, Any]:
         self.run.status = RunStatus.VERIFYING.value
         self.persist()
         runner = gates_mod.GateRunner(self.product_dir, self.metrics, self.run_dir / "evidence")
@@ -282,10 +341,17 @@ class Scheduler:
         result = gates_mod.verdict(evidence, required)
         self.run.verdict = result
         self.run.status = RunStatus.PASSED.value if result.startswith("pass") else RunStatus.FAILED.value
+        attribution = (
+            self.attribute_failures(evidence, required=required, max_attempts=max_attempts)
+            if self.run.status == RunStatus.FAILED.value
+            else {"reopened": [], "unattributed": [], "escalated": []}
+        )
         self.persist()
         ledger.append(
             self.run, self.run_dir, "system.verified", verdict=result,
             gates={e.gate_id: e.status for e in evidence},
+            reopened=attribution["reopened"],
+            unattributed=attribution["unattributed"],
         )
 
         # Retire worker sandboxes only once the integrated tree is proven.
@@ -294,7 +360,84 @@ class Scheduler:
                 if task.worktree:
                     self.repo.remove_worktree(task.worktree)
             self.persist()
-        return {"verdict": result, "evidence": [e.to_dict() for e in evidence]}
+        return {
+            "verdict": result,
+            "evidence": [e.to_dict() for e in evidence],
+            "attribution": attribution,
+        }
+
+    def task_for_component(self, component_id: str) -> Task | None:
+        for task in self.design.tasks:
+            if task.component_id == component_id:
+                return task
+        return None
+
+    def attribute_failures(
+        self,
+        evidence: Iterable[Evidence],
+        required: set[str] | None = None,
+        max_attempts: int = 3,
+    ) -> dict[str, Any]:
+        """Turn red system gates into the next attempt of the task that owns them.
+
+        A gate may declare ``attributed_to`` (component ids). Every failed required
+        gate that carries attribution reopens its component's task on a fresh
+        attempt branch, carrying the real gate output as the repair brief. A failed
+        gate with no attribution is reported as unattributed: the fleet refuses to
+        guess who owns it, and says so rather than retrying blindly.
+        """
+
+        reopened: list[str] = []
+        escalated: list[str] = []
+        unattributed: list[str] = []
+        for item in evidence:
+            if item.status == "pass":
+                continue
+            if required is not None and item.gate_id not in required:
+                continue
+            gate = self.gate_or_none(item.gate_id)
+            if gate is None:
+                # Evidence for a gate the design does not declare cannot be
+                # attributed to anyone; report it instead of guessing.
+                unattributed.append(item.gate_id)
+                continue
+            targets = list(gate.attributed_to)
+            if not targets:
+                unattributed.append(item.gate_id)
+                continue
+            for component_id in targets:
+                task = self.task_for_component(component_id)
+                if task is None:
+                    unattributed.append(f"{item.gate_id}->{component_id}")
+                    continue
+                task.evidence = [
+                    row for row in task.evidence if row.get("gate_id") != item.gate_id
+                ] + [item.to_dict()]
+                task.state = TaskState.FAILED.value
+                task.notes = f"system gate {item.gate_id} failed: {item.detail[:200]}"
+                if task.worktree:
+                    self.repo.remove_worktree(task.worktree)
+                    task.worktree = ""
+                brief = self.write_repair_packet(task.id, max_attempts=max_attempts)
+                packet = json.loads(brief.read_text())
+                if packet.get("escalate"):
+                    escalated.append(task.id)
+                else:
+                    task.state = TaskState.PENDING.value
+                    reopened.append(task.id)
+                ledger.append(
+                    self.run, self.run_dir, "system.attributed",
+                    gate=item.gate_id, task=task.id, attempt=task.attempts,
+                    escalate=bool(packet.get("escalate")), brief=str(brief),
+                )
+        if unattributed:
+            ledger.append(
+                self.run, self.run_dir, "system.unattributed", gates=sorted(set(unattributed)),
+            )
+        self.refresh()
+        self.persist()
+        return {"reopened": sorted(set(reopened)), "escalated": sorted(set(escalated)),
+                "unattributed": sorted(set(unattributed))}
 
     def all_evidence(self) -> list[Evidence]:
         return [Evidence.from_dict(item) for item in self.run.evidence]

@@ -180,6 +180,10 @@ class Gate:
     json_path: str = ""
     json_expected: Any = None
     description: str = ""
+    # Which components a failure of this gate implicates. System gates run on the
+    # integrated tree, where "who broke it" is not obvious; attribution is what
+    # turns a red system gate into a repair packet instead of a human enquiry.
+    attributed_to: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Gate":

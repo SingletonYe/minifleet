@@ -1,0 +1,86 @@
+{
+  "id": "minifleet-v03-quarantine",
+  "title": "MiniFleet v0.3: quarantine flaky gates",
+  "summary": "The fleet adds flaky-gate quarantine to itself, and the run is used to test the fleet's own repair loop with a deliberately injected defect.",
+  "intent": "A gate that red-lights an unlucky run teaches people to ignore red, so the fleet needs to tell a flaky gate from a broken one. Add minifleet/quarantine.py: classify a series of gate outcomes as insufficient-data, stable-pass, stable-fail or flaky, and list the gates worth quarantining. Refuse to decide on a sample smaller than the minimum. Do this without breaking the engine, the shipped service, or the deployment path.",
+  "stakeholders": ["the fleet operator", "the on-call engineer who stops trusting red gates"],
+  "deliverables": [
+    "minifleet/quarantine.py - classify repeated gate outcomes and list flaky gates",
+    "tests/test_quarantine.py - the worker's own tests",
+    "the existing engine, service and deployment gates, still green"
+  ],
+  "constraints": [
+    "Python 3.12 standard library only",
+    "harness/ is frozen: workers may read it, never modify it",
+    "the engine's existing behaviour and the shipped linksvc service must be unaffected"
+  ],
+  "out_of_scope": [
+    "automatically re-running gates to collect samples",
+    "persisting quarantine state between runs"
+  ],
+  "budgets": {
+    "deploy_ready_seconds": 10.0,
+    "deploy_p50_ms": 50.0
+  },
+  "acceptance": [
+    {"id": "A-1", "kind": "functional", "statement": "classify() labels all-pass as stable-pass, all-fail as stable-fail and mixed outcomes as flaky, with an exact pass_rate and sample count", "gates": ["G-quarantine"]},
+    {"id": "A-2", "kind": "safety", "statement": "A sample smaller than min_samples - including an empty one - is insufficient-data with a null pass_rate, never a verdict", "gates": ["G-quarantine"]},
+    {"id": "A-3", "kind": "functional", "statement": "Exactly min_samples outcomes are enough to decide; the boundary is inclusive", "gates": ["G-quarantine"]},
+    {"id": "A-4", "kind": "functional", "statement": "quarantine() returns only flaky gates, sorted, and never quarantines insufficient data", "gates": ["G-quarantine"]},
+    {"id": "A-5", "kind": "safety", "statement": "The pre-existing engine regression suite still passes on the integrated tree", "gates": ["G-regression"]},
+    {"id": "A-6", "kind": "safety", "statement": "The shipped linksvc service still passes its own acceptance harness", "gates": ["G-service"]},
+    {"id": "A-7", "kind": "operability", "statement": "The fleet can still deploy a running system and probe it: ready under 10s, p50 under 50ms", "gates": ["G-deploy", "G-budget-ready", "G-budget-p50"]}
+  ],
+  "gates": [
+    {"id": "G-unit", "title": "worker's own tests plus the baseline suite", "kind": "cmd", "scope": "task",
+     "cmd": "python3 -m unittest discover -s tests -v", "timeout": 900},
+    {"id": "G-quarantine", "title": "frozen quarantine contract", "kind": "cmd", "scope": "system",
+     "cmd": "python3 -m unittest harness.test_quarantine -v", "timeout": 900,
+     "attributed_to": ["quarantine"]},
+    {"id": "G-regression", "title": "engine regression on the integrated tree", "kind": "cmd", "scope": "system",
+     "cmd": "python3 -m unittest discover -s tests", "timeout": 900},
+    {"id": "G-service", "title": "shipped service still passes its own harness", "kind": "cmd", "scope": "system",
+     "cmd": "cd examples/linksvc && python3 -m unittest harness.test_accept -v", "timeout": 900},
+    {"id": "G-deploy", "title": "deploy and observe the shipped service", "kind": "cmd", "scope": "system",
+     "cmd": "python3 -m minifleet deploy --dir examples/linksvc --cmd \"python3 -m linksvc --host 127.0.0.1 --port 0 --db /tmp/minifleet-v03-deploy.db --rate 1000 --burst 1000\" --probe /healthz --seconds 3 --emit-metrics",
+     "timeout": 900},
+    {"id": "G-budget-ready", "title": "the service becomes ready quickly", "kind": "budget", "scope": "system",
+     "metric": "deploy_ready_seconds", "op": "<=", "threshold": 10.0},
+    {"id": "G-budget-p50", "title": "the deployed service answers quickly", "kind": "budget", "scope": "system",
+     "metric": "deploy_p50_ms", "op": "<=", "threshold": 50.0},
+    {"id": "G-layout", "title": "the new module is where the contract says", "kind": "files", "scope": "system",
+     "paths": ["minifleet/quarantine.py", "ACCEPTANCE.md"]}
+  ],
+  "contracts": [
+    {
+      "id": "C-V03",
+      "path": "contracts/C-V03.md",
+      "summary": "Frozen interface for flaky-gate quarantine.",
+      "exports": {
+        "minifleet.quarantine.classify": "classify(outcomes: list[bool], min_samples: int = 3, flake_threshold: float = 0.5) -> {'verdict': str, 'pass_rate': float|None, 'samples': int, 'dominant': str|None}",
+        "minifleet.quarantine.quarantine": "quarantine(gates: dict[str, list[bool]], min_samples: int = 3, flake_threshold: float = 0.5) -> list[str]"
+      },
+      "content": "## Exact semantics\n\n`classify(outcomes, min_samples=3, flake_threshold=0.5)`:\n\n- `len(outcomes) < min_samples` -> verdict `insufficient-data`, `pass_rate` **None**, `samples` = len, `dominant` None. An empty list is the `samples: 0` case of this rule.\n- otherwise `pass_rate = round(passes / samples, 3)` and verdict is all of: `stable-pass` when the rate is 1.0, `stable-fail` when it is 0.0, otherwise `flaky`.\n- `dominant` is `pass` when `pass_rate >= flake_threshold` else `fail`; for a stable verdict it matches the verdict; for `insufficient-data` it is None.\n- `min_samples` <= 0 raises ValueError. A non-boolean entry raises TypeError.\n\n`quarantine(gates, min_samples=3, flake_threshold=0.5)` returns the gate ids whose verdict is exactly `flaky`, sorted ascending. Gates with insufficient data are never returned."
+    }
+  ],
+  "harness_dir": "harness-quarantine",
+  "baseline_from": "..",
+  "components": [
+    {
+      "id": "quarantine",
+      "name": "Flaky-gate quarantine",
+      "responsibility": "Implement minifleet/quarantine.py: classify repeated gate outcomes and list the gates worth quarantining.",
+      "owns": ["minifleet/quarantine.py", "tests/test_quarantine.py"],
+      "contract_ids": ["C-V03"],
+      "acceptance_ids": ["A-1", "A-2", "A-3", "A-4"],
+      "gate_ids": ["G-unit"],
+      "done_when": [
+        "classify() returns exactly the four documented keys",
+        "insufficient data - including the empty sample - is never given a verdict",
+        "min_samples is an inclusive boundary",
+        "quarantine() returns sorted flaky gate ids only"
+      ],
+      "tests": ["unit tests for stable, flaky and insufficient-data cases"]
+    }
+  ]
+}

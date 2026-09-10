@@ -211,3 +211,27 @@ def soak(
         "p50_ms": round(float(p50), 3),
         "max_ms": round(max(ordered) if ordered else 0.0, 3),
     }
+
+
+def metrics_from_report(report: dict) -> dict[str, float]:
+    """Flatten a deploy report into the metrics a budget gate can enforce.
+
+    This is what lets an intent say "the system must be ready in under 10 seconds
+    and answer in under 50 ms at p50" and have the fleet's own deployment stage be
+    the thing that measures it.
+    """
+
+    metrics: dict[str, float] = {"deploy_ok": 1.0 if report.get("ok") else 0.0}
+    ready = report.get("ready") or {}
+    if ready.get("seconds") is not None:
+        metrics["deploy_ready_seconds"] = round(float(ready["seconds"]), 3)
+    smoke = report.get("smoke") or {}
+    if smoke.get("seconds") is not None:
+        metrics["deploy_smoke_ms"] = round(float(smoke["seconds"]) * 1000.0, 3)
+    if smoke.get("status") is not None:
+        metrics["deploy_smoke_status"] = float(smoke["status"])
+    soak_result = report.get("soak") or {}
+    for key in ("p50_ms", "max_ms", "samples", "failures"):
+        if soak_result.get(key) is not None:
+            metrics[f"deploy_{key}"] = float(soak_result[key])
+    return metrics

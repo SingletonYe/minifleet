@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from . import architect, intent as intent_mod, ledger, report as report_mod
-from .deploy import Supervisor, smoke, soak
+from .deploy import Supervisor, metrics_from_report, smoke, soak
 from .fleetmetrics import summarize
 from .model import Design, IntentSpec, Run, RunStatus, TaskState
 from .repair import build_repair_packet
@@ -83,6 +83,17 @@ def main(argv: list[str] | None = None) -> int:
     p_deploy.add_argument("--seconds", type=float, default=0.0, help="soak window in seconds")
     p_deploy.add_argument("--ready-prefix", default="MINIFLEET_READY")
     p_deploy.add_argument("--timeout", type=float, default=30.0, help="seconds to wait for ready")
+    p_deploy.add_argument("--emit-metrics", action="store_true",
+                          help="print MINIFLEET_METRIC lines so budget gates can enforce them")
+
+    p_autopilot = sub.add_parser(
+        "autopilot", help="drive a run to a verdict: dispatch, verify, repair, repeat"
+    )
+    p_autopilot.add_argument("--run", required=True)
+    p_autopilot.add_argument("--dispatcher", required=True, help="command:<cmd> or http")
+    p_autopilot.add_argument("--max-attempts", type=int, default=3)
+    p_autopilot.add_argument("--max-rounds", type=int, default=4)
+    p_autopilot.add_argument("--max-parallel", type=int, default=4)
 
     p_metrics = sub.add_parser("fleetmetrics", help="account for a run: attempts, retries, gates, path")
     p_metrics.add_argument("--run", required=True)
@@ -101,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
         "evolve": cmd_evolve,
         "repair": cmd_repair,
         "deploy": cmd_deploy,
+        "autopilot": cmd_autopilot,
         "fleetmetrics": cmd_fleetmetrics,
     }[args.command]
     return handler(args)
@@ -334,6 +346,28 @@ def cmd_repair(args: argparse.Namespace) -> int:
 
     run_dir = Path(args.run)
     record = json.loads((run_dir / "run.json").read_text())
+
+    # A live run has a product repository: repair means reopening the task on a
+    # fresh attempt branch, not just writing a note about it.
+    repo_dir = record.get("repo_dir") or ""
+    if repo_dir and (Path(repo_dir) / ".git").exists():
+        run, _ = _load(run_dir)
+        scheduler, _ = _scheduler(run, run_dir)
+        result = scheduler.repair_failed(max_attempts=args.max_attempts)
+        if not result["reopened"] and not result["escalated"]:
+            print("no failed tasks")
+            for gate in result["unattributed"]:
+                print(f"  unattributed failure: {gate}")
+            return 0
+        print(f"{len(result['reopened'])} task(s) reopened for another attempt")
+        for task_id in result["reopened"]:
+            print(f"  {task_id}: {run_dir / 'packets' / f'{task_id}.repair.json'}")
+        for task_id in result["escalated"]:
+            print(f"  {task_id}: ESCALATED (attempt budget exhausted)")
+        for gate in result["unattributed"]:
+            print(f"  unattributed failure: {gate} (no component claims it)")
+        return 0 if not result["escalated"] else 2
+
     tasks = ((record.get("design") or {}).get("tasks")) or []
     failed = [task for task in tasks if task.get("state") == "failed"]
     if not failed:
@@ -387,7 +421,78 @@ def cmd_deploy(args: argparse.Namespace) -> int:
     finally:
         report["exit_code"] = supervisor.stop()
     print(json.dumps(report, indent=2, sort_keys=True))
+    if getattr(args, "emit_metrics", False):
+        for name, value in metrics_from_report(report).items():
+            print("MINIFLEET_METRIC " + json.dumps({"name": name, "value": value}))
     return 0 if report["ok"] else 1
+
+
+def cmd_autopilot(args: argparse.Namespace) -> int:
+    """Drive a run to a verdict: dispatch, ingest, integrate, verify, repair, repeat.
+
+    This is the loop the three v0.2 capabilities exist to close. It stops for one
+    of three reasons and says which: the run passed, the attempt budget for every
+    failing task is exhausted (escalation), or nothing attributable is left to fix.
+    """
+
+    run, run_dir = _load(args.run)
+    scheduler, _spec = _scheduler(run, run_dir)
+    dispatcher = make_dispatcher(args.dispatcher)
+    if isinstance(dispatcher, PacketDispatcher):
+        print("autopilot needs a dispatcher that can run workers: command:<cmd> or http", file=sys.stderr)
+        return 2
+
+    history: list[dict[str, Any]] = []
+    for round_index in range(1, args.max_rounds + 1):
+        print(f"--- round {round_index}: dispatch ---")
+        dispatched = scheduler.dispatch(dispatcher, max_parallel=args.max_parallel)
+        for item in dispatched:
+            if item.get("status") == "submitted":
+                outcome = scheduler.ingest(item["task_id"], worker=str(item.get("worker", "")))
+                print(f"  {item['task_id']:<18}{outcome['status']:<10}{outcome.get('gates', {})}")
+            else:
+                task = scheduler.task(item["task_id"])
+                task.state = TaskState.FAILED.value
+                task.notes = str(item.get("notes", ""))[:400]
+                scheduler.persist()
+                print(f"  {item['task_id']:<18}{item.get('status')}")
+
+        integration = scheduler.integrate()
+        if integration.get("status") != "ok":
+            history.append({"round": round_index, "integration": integration})
+            print(f"  integration failed: {integration.get('detail') or integration.get('conflicts')}")
+            break
+        verification = scheduler.verify(max_attempts=args.max_attempts)
+        attribution = verification.get("attribution", {})
+        history.append({
+            "round": round_index,
+            "dispatched": [item["task_id"] for item in dispatched],
+            "merged": integration.get("merged", []),
+            "verdict": verification["verdict"],
+            "reopened": attribution.get("reopened", []),
+            "unattributed": attribution.get("unattributed", []),
+        })
+        print(f"  verify: {verification['verdict']}")
+        if scheduler.run.status == RunStatus.PASSED.value:
+            break
+        repair = scheduler.repair_failed(max_attempts=args.max_attempts)
+        print(f"  repair: reopened={repair['reopened']} escalated={repair['escalated']}")
+        if repair["escalated"] and not repair["reopened"]:
+            print("  escalating: the attempt budget is exhausted")
+            break
+        if not repair["reopened"]:
+            print("  nothing attributable left to repair; stopping")
+            break
+
+    report_mod.write(run, run_dir)
+    ledger.append(run, run_dir, "autopilot.finished", status=run.status, verdict=run.verdict,
+                  rounds=len(history))
+    print("")
+    print(f"status : {run.status}")
+    print(f"verdict: {run.verdict}")
+    print(f"rounds : {len(history)}")
+    print(f"report : {run_dir / 'report.html'}")
+    return 0 if run.status == RunStatus.PASSED.value else 1
 
 
 def cmd_fleetmetrics(args: argparse.Namespace) -> int:

@@ -414,5 +414,101 @@ class EndToEndTests(unittest.TestCase):
             )
 
 
+class RepairLoopTests(unittest.TestCase):
+    """A red system gate must become the next attempt, not a human enquiry."""
+
+    def _run_with_failing_system_gate(self, root: Path, attributed: bool):
+        data = _intent()
+        for gate in data["gates"]:
+            if gate["id"] == "G-accept":
+                gate["cmd"] = "python3 -c \"import sys; sys.exit(1)\""
+                if attributed:
+                    gate["attributed_to"] = ["calc"]
+        intent_path = root / "intent.json"
+        intent_path.write_text(json.dumps(data, indent=2))
+        spec = intent_mod.load(intent_path)
+        run, run_dir = ledger.create(root / "runs", spec, "fake")
+        design = architect.design(spec)
+        run.set_design(design)
+        scheduler = Scheduler(run, run_dir, spec, design)
+        scheduler.repo.init({"calc/__init__.py": "", "calc/core.py": "", "tests/test_calc.py": ""})
+        scheduler.repo.ensure_branch(run.integration_branch)
+        scheduler.refresh()
+        return scheduler, run, run_dir
+
+    def test_attributed_system_failure_reopens_the_owning_task(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scheduler, run, run_dir = self._run_with_failing_system_gate(Path(tmp), attributed=True)
+            scheduler.dispatch(FakeDispatcher({"T-calc": MODULE_FILES}))
+            self.assertEqual(scheduler.ingest("T-calc")["status"], "verified")
+            self.assertEqual(scheduler.integrate()["status"], "ok")
+
+            verification = scheduler.verify()
+            self.assertTrue(verification["verdict"].startswith("fail"))
+            self.assertEqual(verification["attribution"]["reopened"], ["T-calc"])
+            task = scheduler.task("T-calc")
+            self.assertIn(task.state, {TaskState.PENDING.value, TaskState.READY.value})
+
+            packet = json.loads((run_dir / "packets" / "T-calc.repair.json").read_text())
+            self.assertEqual([g["gate_id"] for g in packet["failing_gates"]], ["G-accept"])
+            self.assertFalse(packet["escalate"])
+            self.assertIn("G-accept", " ".join(packet["instructions"]))
+            events = [e["event"] for e in run.events]
+            self.assertIn("system.attributed", events)
+            attributed = [e for e in run.events if e["event"] == "system.attributed"][0]
+            self.assertEqual(attributed["gate"], "G-accept")
+            self.assertEqual(attributed["task"], "T-calc")
+            self.assertFalse(attributed["escalate"])
+            # Gates nobody claims are reported rather than retried blindly.
+            self.assertIn("system.unattributed", events)
+
+    def test_unattributed_system_failure_is_reported_not_retried(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scheduler, run, _ = self._run_with_failing_system_gate(Path(tmp), attributed=False)
+            scheduler.dispatch(FakeDispatcher({"T-calc": MODULE_FILES}))
+            scheduler.ingest("T-calc")
+            scheduler.integrate()
+            verification = scheduler.verify()
+            self.assertEqual(verification["attribution"]["reopened"], [])
+            self.assertIn("G-accept", verification["attribution"]["unattributed"])
+            self.assertEqual(scheduler.task("T-calc").state, TaskState.MERGED.value)
+            self.assertIn("system.unattributed", [e["event"] for e in run.events])
+
+    def test_repair_stops_at_the_attempt_budget(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scheduler, _run, _run_dir = self._run_with_failing_system_gate(Path(tmp), attributed=True)
+            scheduler.dispatch(FakeDispatcher({"T-calc": MODULE_FILES}))
+            scheduler.ingest("T-calc")
+            scheduler.integrate()
+            scheduler.verify()
+
+            task = scheduler.task("T-calc")
+            task.attempts = 3
+            scheduler.persist()
+
+            result = scheduler.repair_failed(max_attempts=3)
+            self.assertEqual(result["escalated"], ["T-calc"])
+            self.assertEqual(result["reopened"], [])
+            self.assertEqual(task.state, TaskState.FAILED.value)
+
+    def test_deploy_metrics_are_flattened_for_budget_gates(self):
+        from minifleet.deploy import metrics_from_report
+
+        metrics = metrics_from_report(
+            {
+                "ok": True,
+                "ready": {"ready": True, "port": 8080, "seconds": 0.25},
+                "smoke": {"status": 200, "ok": True, "seconds": 0.05},
+                "soak": {"samples": 21, "failures": 0, "ok": True, "p50_ms": 1.68, "max_ms": 3.1},
+            }
+        )
+        self.assertEqual(metrics["deploy_ok"], 1.0)
+        self.assertEqual(metrics["deploy_ready_seconds"], 0.25)
+        self.assertEqual(metrics["deploy_smoke_ms"], 50.0)
+        self.assertEqual(metrics["deploy_p50_ms"], 1.68)
+        self.assertEqual(metrics["deploy_samples"], 21.0)
+        self.assertEqual(metrics["deploy_failures"], 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()
