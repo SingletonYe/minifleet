@@ -240,6 +240,59 @@ class WorktreeTests(unittest.TestCase):
             self.assertEqual((destination / "ACCEPTANCE.md").read_text(), "frozen\n")
             self.assertTrue(repo.head())
 
+    def test_brownfield_adoption_pins_a_revision_instead_of_the_working_copy(self):
+        """A dirty working copy must not become the product baseline.
+
+        This reproduces the defect the post-run audit found in the v0.2 run: the
+        adopted tree was one test short of the revision the intent pointed at,
+        because adoption copied whatever was on disk. The product tree has to be
+        a revision.
+        """
+
+        from minifleet.cli import adopt_baseline, source_revision
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "legacy"
+            source.mkdir()
+            repo = wt.Repo(source)
+            (source / "app.py").write_text("value = 1\n")
+            repo.init({})
+            revision = repo.head()
+
+            # The working copy drifts away from the revision the run must adopt.
+            (source / "app.py").write_text("value = 2\n")
+            (source / "scratch.py").write_text("not committed\n")
+
+            info = source_revision(source)
+            self.assertEqual(info["revision"], revision)
+            self.assertTrue(info["dirty"])
+
+            destination = Path(tmp) / "product"
+            provenance = adopt_baseline(source, destination)
+
+            self.assertEqual(provenance["mode"], "git-revision")
+            self.assertEqual(provenance["revision"], revision)
+            self.assertTrue(provenance["dirty"])
+            self.assertEqual(provenance["files"], 1)
+            self.assertEqual((destination / "app.py").read_text(), "value = 1\n")
+            self.assertFalse((destination / "scratch.py").exists())
+
+    def test_brownfield_adoption_falls_back_to_the_filesystem_without_git(self):
+        from minifleet.cli import adopt_baseline
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "plain"
+            source.mkdir()
+            (source / "old.py").write_text("value = 1\n")
+
+            destination = Path(tmp) / "product"
+            provenance = adopt_baseline(source, destination)
+
+            self.assertEqual(provenance["mode"], "filesystem")
+            self.assertIsNone(provenance["revision"])
+            self.assertEqual(provenance["files"], 1)
+            self.assertEqual((destination / "old.py").read_text(), "value = 1\n")
+
 
 class EndToEndTests(unittest.TestCase):
     def test_full_run_passes_and_is_auditable(self):

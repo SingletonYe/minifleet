@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import shlex
 import shutil
+import subprocess
 import sys
+import tarfile
 import time
 from pathlib import Path
 from typing import Any
@@ -18,6 +21,7 @@ from .model import Design, IntentSpec, Run, RunStatus, TaskState
 from .repair import build_repair_packet
 from .scheduler import Scheduler
 from .workers import PacketDispatcher, make_dispatcher
+from .worktree import GitError, git
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -116,10 +120,18 @@ def cmd_plan(args: argparse.Namespace) -> int:
     baseline["INTENT.md"] = f"# Intent as received\n\n{_prose(raw)}\n\n```json\n{raw.strip()}\n```\n"
 
     brownfield = bool(spec.baseline_from)
+    provenance: dict[str, Any] | None = None
     if brownfield:
         source = (Path(args.intent).parent / spec.baseline_from).resolve()
-        copied = copy_baseline_tree(source, Path(run.repo_dir))
-        print(f"baseline : brownfield from {source} ({copied} files)")
+        provenance = adopt_baseline(source, Path(run.repo_dir))
+        (run_dir / "baseline.json").write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n")
+        ledger.append(run, run_dir, "baseline.adopted", **provenance)
+        origin = provenance["revision"] or "working tree"
+        dirty = " (working copy was dirty)" if provenance.get("dirty") else ""
+        print(
+            f"baseline : brownfield from {source} [{provenance['mode']}] "
+            f"{provenance['files']} files @ {origin}{dirty}"
+        )
     scheduler.repo.init(
         baseline,
         overwrite=not brownfield,
@@ -491,6 +503,86 @@ def copy_baseline_tree(source: Path, destination: Path) -> int:
         shutil.copy2(path, target)
         count += 1
     return count
+
+
+def _git_bytes(args: list[str], cwd: Path) -> bytes:
+    proc = subprocess.run(["git", *args], cwd=str(cwd), capture_output=True)
+    if proc.returncode != 0:
+        raise GitError(
+            f"git {' '.join(args)} failed in {cwd}:\n{proc.stderr.decode(errors='replace').strip()}"
+        )
+    return proc.stdout
+
+
+def source_revision(source: Path) -> dict[str, Any] | None:
+    """The committed revision of a git source tree, and whether its working copy is dirty.
+
+    Returns ``None`` for a plain directory, which is the only case where the
+    filesystem is the truth. A working copy is not a revision: it can be
+    half-written, stale, or shared with another process.
+    """
+
+    if not (source / ".git").exists():
+        return None
+    head = git(["rev-parse", "HEAD"], source, check=False)
+    if head.returncode != 0:
+        return None
+    status = git(["status", "--porcelain"], source, check=False)
+    return {"revision": head.stdout.strip(), "dirty": bool(status.stdout.strip())}
+
+
+def copy_revision_tree(source: Path, destination: Path, revision: str) -> int:
+    """Materialise the committed tree of ``revision``, ignoring the working copy."""
+
+    archive = _git_bytes(["archive", "--format=tar", revision], source)
+    destination.mkdir(parents=True, exist_ok=True)
+    count = 0
+    with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+        for member in tar.getmembers():
+            if not member.isfile():
+                continue
+            rel = Path(member.name)
+            if any(part in IGNORED_DIRS for part in rel.parts):
+                continue
+            if rel.suffix in IGNORED_SUFFIXES or member.size > MAX_COPY_BYTES:
+                continue
+            handle = tar.extractfile(member)
+            if handle is None:
+                continue
+            target = destination / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(handle.read())
+            count += 1
+    return count
+
+
+def adopt_baseline(source: Path, destination: Path) -> dict[str, Any]:
+    """Adopt an existing codebase as the product tree, pinned to a revision when possible.
+
+    A brownfield run has to be reproducible: it adopts ``HEAD`` of the source
+    repository and records that revision, so the product tree is a revision
+    rather than whatever happened to be on disk when the planner ran. Only a
+    non-git directory falls back to copying the filesystem.
+    """
+
+    info = source_revision(source)
+    if info is None:
+        files = copy_baseline_tree(source, destination)
+        return {
+            "mode": "filesystem",
+            "source": str(source),
+            "revision": None,
+            "dirty": None,
+            "files": files,
+        }
+    files = copy_revision_tree(source, destination, info["revision"])
+    return {
+        "mode": "git-revision",
+        "source": str(source),
+        "revision": info["revision"],
+        "dirty": info["dirty"],
+        "files": files,
+    }
 
 
 def _readme(spec: IntentSpec, design: Design) -> str:

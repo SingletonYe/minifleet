@@ -161,6 +161,11 @@ as its product instead of writing a fresh one. Fleet-owned paths (`ACCEPTANCE.md
 it was - the fleet may add to a codebase, but it may not silently clobber it. The new
 acceptance harness is frozen into the adopted tree *before* any worker is dispatched, and
 the regression suite that shipped with the repository is part of the definition of done.
+Adoption is **pinned to a revision**: when the source is a git repository the planner
+materialises `HEAD` rather than copying the working copy, and it records the revision and
+the file count in `baseline.json` plus a `baseline.adopted` ledger event (a dirty working
+copy is recorded, not adopted). Untracked files are not part of a baseline, so commit what
+you want the fleet to start from.
 
 **Autonomy on failure, deployment, and self-accounting.** Three modules, all reachable
 from the CLI, all judged by gates the workers did not write:
@@ -190,6 +195,17 @@ report is at <https://singletonye.github.io/minifleet/selfhost.html>.
 critical path 153.7 s, and the regression suite at 6.6 s against a 60 s budget - the
 measurement is printed by `harness/bench.py` as `MINIFLEET_METRIC`, so the budget gate
 reads the same number the report shows.
+
+**What the post-run audit found.** The run's own gates were green, so the operator re-verified
+it from a fresh clone instead of reading the report: the frozen harness (11 contract + 4
+wiring tests), the regression suite, the layout and budget gates, and each new capability
+driven by hand - `repair` against a run record with no git repository, `deploy` against the
+short-link service the *first* run produced, `fleetmetrics` against this run. All of it
+reproduced. The audit also found a defect no gate in that run could have caught: the adopted
+baseline was **one test short** of the revision its intent pointed at, because adoption
+copied whatever was on disk. Adoption now pins `HEAD` and records the revision, and
+`tests/test_engine.py` pins the behaviour. The audit record, including the exact commands
+and the discrepancy, is in [`evidence/selfhost-run/AUDIT.md`](evidence/selfhost-run/AUDIT.md).
 
 ## Repository layout
 
