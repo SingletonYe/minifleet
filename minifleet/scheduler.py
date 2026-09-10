@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-from . import architect, gates as gates_mod, ledger, worktree as wt
+from . import architect, gates as gates_mod, ledger, repair as repair_mod, worktree as wt
 from .model import Design, Evidence, Gate, IntentSpec, Run, RunStatus, Task, TaskState
 from .workers import Dispatcher, Packet, build_packet
 
@@ -195,6 +195,16 @@ class Scheduler:
             task=task_id,
             gates={e.gate_id: e.status for e in evidence},
         )
+        if not passed:
+            # A failure is only useful if it becomes the next attempt's brief.
+            # The packet is written next to the task packet and recorded in the
+            # ledger; dispatching it is still a separate, explicit decision.
+            brief = self.write_repair_packet(task_id)
+            ledger.append(
+                self.run, self.run_dir, "task.repair_packet",
+                task=task_id, attempt=task.attempts, path=str(brief),
+                escalate=bool(json.loads(brief.read_text())["escalate"]),
+            )
         return {
             "task_id": task_id,
             "status": "verified" if passed else "failed",
@@ -202,6 +212,19 @@ class Scheduler:
             "gates": {e.gate_id: e.status for e in evidence},
             "evidence": [e.to_dict() for e in evidence],
         }
+
+    # -- repair ----------------------------------------------------------
+    def write_repair_packet(self, task_id: str, max_attempts: int = 3) -> Path:
+        """Record what the next attempt of a failed task must fix, and its budget."""
+
+        task = self.task(task_id)
+        packet = repair_mod.build_repair_packet(
+            task.to_dict(), list(task.evidence), attempt=task.attempts, max_attempts=max_attempts
+        )
+        path = self.run_dir / "packets" / f"{task.id}.repair.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(packet, indent=2, sort_keys=True))
+        return path
 
     # -- integration -----------------------------------------------------
     def integrate(self) -> dict[str, Any]:

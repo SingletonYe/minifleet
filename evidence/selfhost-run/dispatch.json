@@ -1,0 +1,13 @@
+[
+  {
+    "commands": [],
+    "files": [],
+    "finished_at": null,
+    "notes": "packet written to runs/20260910T114536Z-minifleet-v02-40d5be/packets/T-wiring.md; awaiting an external agent runtime",
+    "raw": {},
+    "started_at": 1789040848.8018734,
+    "status": "dispatched",
+    "task_id": "T-wiring",
+    "worker": "external-runtime"
+  }
+]

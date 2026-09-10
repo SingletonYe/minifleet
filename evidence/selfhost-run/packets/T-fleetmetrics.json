@@ -1,0 +1,130 @@
+{
+  "acceptance": [
+    {
+      "gates": [
+        "G-contract"
+      ],
+      "id": "A-1",
+      "kind": "functional",
+      "statement": "A repair packet lists only the failing gates, in gate-id order, carries the task write scope and never mutates its inputs"
+    },
+    {
+      "gates": [
+        "G-contract"
+      ],
+      "id": "A-2",
+      "kind": "safety",
+      "statement": "Repair is bounded: once the attempt budget is exhausted the packet sets escalate instead of proposing another attempt"
+    },
+    {
+      "gates": [
+        "G-contract"
+      ],
+      "id": "A-3",
+      "kind": "operability",
+      "statement": "A supervisor starts a process, parses its ready line and port, times out without hanging when no ready line arrives, and always tears the process down"
+    },
+    {
+      "gates": [
+        "G-contract"
+      ],
+      "id": "A-4",
+      "kind": "operability",
+      "statement": "Smoke and soak probes report status, sample count, failure count and latency percentiles"
+    },
+    {
+      "gates": [
+        "G-contract"
+      ],
+      "id": "A-5",
+      "kind": "functional",
+      "statement": "Fleet metrics report tasks, merged, failed, attempts, retries, gate outcomes and the critical path through the task graph"
+    },
+    {
+      "gates": [
+        "G-wiring"
+      ],
+      "id": "A-6",
+      "kind": "functional",
+      "statement": "repair, deploy and fleetmetrics are CLI subcommands; repair writes one repair packet per failed task and reports cleanly when nothing failed"
+    },
+    {
+      "gates": [
+        "G-regression"
+      ],
+      "id": "A-7",
+      "kind": "safety",
+      "statement": "The pre-existing engine behaviour is unchanged: the regression suite that shipped with the baseline still passes on the integrated tree"
+    },
+    {
+      "gates": [
+        "G-budget-bench"
+      ],
+      "id": "A-8",
+      "kind": "nfr",
+      "statement": "The regression suite still finishes within 60 seconds"
+    }
+  ],
+  "base_commit": "812061ccc48ec749effc1a743ccb5d5356d08b59",
+  "budgets": {
+    "engine_tests_ms": 60000.0
+  },
+  "contracts": [
+    {
+      "exports": {
+        "minifleet cli": "python3 -m minifleet repair --run DIR writes packets/<task>.repair.json for every failed task and prints 'no failed tasks' when there are none; python3 -m minifleet deploy --dir DIR --cmd CMD --probe PATH [--seconds N] starts the process, waits for its ready line, smokes and soaks the probe path, prints a JSON report and exits non-zero when the probe fails; python3 -m minifleet fleetmetrics --run DIR prints the summarize() JSON on stdout",
+        "minifleet.deploy.Supervisor": "Supervisor(argv: list[str], cwd: str, ready_prefix: str = 'MINIFLEET_READY', timeout: float = 30.0) with .start() -> Supervisor, .wait_ready() -> {'ready': bool, 'port': int|None, 'seconds': float, 'stdout_tail': str}, .stop(timeout: float = 10.0) -> int, .running -> bool",
+        "minifleet.deploy.smoke": "smoke(url: str, timeout: float = 5.0) -> {'status': int, 'ok': bool, 'seconds': float}",
+        "minifleet.deploy.soak": "soak(url: str, seconds: float, interval: float = 0.25, timeout: float = 5.0) -> {'samples': int, 'failures': int, 'ok': bool, 'p50_ms': float, 'max_ms': float}",
+        "minifleet.fleetmetrics.summarize": "summarize(run: dict) -> {'tasks': int, 'merged': int, 'failed': int, 'attempts_total': int, 'retries': int, 'gates_total': int, 'gates_passed': int, 'gates_failed': int, 'critical_path_seconds': float, 'slowest_task': {'id': str, 'seconds': float} | None, 'verdict': str}",
+        "minifleet.repair.build_repair_packet": "build_repair_packet(task: dict, evidence: list[dict], attempt: int, max_attempts: int = 3) -> dict with keys task_id, attempt, max_attempts, escalate, reason, failing_gates[{gate_id,status,detail}], instructions[list[str]], scope[list[str]], carry_forward[list[str]]"
+      },
+      "frozen": true,
+      "id": "C-V02",
+      "path": "contracts/C-V02.md",
+      "summary": "Frozen interfaces for the three v0.2 modules and the CLI surface that exposes them."
+    }
+  ],
+  "integration_branch": "integration",
+  "product_dir": "runs/20260910T114536Z-minifleet-v02-40d5be/product",
+  "run_id": "20260910T114536Z-minifleet-v02-40d5be",
+  "task": {
+    "acceptance_ids": [
+      "A-5"
+    ],
+    "attempts": 0,
+    "branch": "task/fleetmetrics-a2",
+    "component_id": "fleetmetrics",
+    "contract_ids": [
+      "C-V02"
+    ],
+    "depends_on": [],
+    "done_when": [
+      "summarize returns every documented key for a realistic run record",
+      "the critical path follows depends_on edges and is not the sum of all durations",
+      "an empty run summarises without raising"
+    ],
+    "evidence": [],
+    "finished_at": null,
+    "gate_ids": [
+      "G-unit"
+    ],
+    "goal": "Implement minifleet/fleetmetrics.py: account for a run - attempts, retries, gate outcomes and the critical path.",
+    "id": "T-fleetmetrics",
+    "notes": "",
+    "owns": [
+      "minifleet/fleetmetrics.py",
+      "tests/test_fleetmetrics.py"
+    ],
+    "role": "builder",
+    "started_at": null,
+    "state": "ready",
+    "submitted_files": [],
+    "tests": [
+      "unit tests over synthetic run records, including a branching graph"
+    ],
+    "title": "Fleet metrics",
+    "worktree": "/home/user/workspace/minifleet/runs/20260910T114536Z-minifleet-v02-40d5be/worktrees/fleetmetrics"
+  },
+  "worktree": "/home/user/workspace/minifleet/runs/20260910T114536Z-minifleet-v02-40d5be/worktrees/fleetmetrics"
+}

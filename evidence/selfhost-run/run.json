@@ -1,0 +1,1189 @@
+{
+  "created_at": 1789040736.9182293,
+  "design": {
+    "components": [
+      {
+        "acceptance_ids": [
+          "A-1",
+          "A-2"
+        ],
+        "contract_ids": [
+          "C-V02"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "build_repair_packet matches the frozen signature and returns every documented key",
+          "failing gates are ordered by gate_id and exclude every passing gate",
+          "instructions name each failing gate id",
+          "the attempt budget is respected: escalate is set once it is exhausted",
+          "inputs are not mutated"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "repair",
+        "name": "Bounded self-repair",
+        "owns": [
+          "minifleet/repair.py",
+          "tests/test_repair.py"
+        ],
+        "responsibility": "Implement minifleet/repair.py, turning gate evidence into an actionable, bounded repair packet.",
+        "tests": [
+          "unit tests covering ordering, escalation, empty evidence and non-mutation"
+        ]
+      },
+      {
+        "acceptance_ids": [
+          "A-3",
+          "A-4"
+        ],
+        "contract_ids": [
+          "C-V02"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "Supervisor.start/wait_ready/stop behave as specified and never leak a child process",
+          "a missing ready line returns ready False within the timeout instead of hanging",
+          "smoke reports status, ok and elapsed time",
+          "soak reports samples, failures, ok, p50_ms and max_ms, and survives a dead endpoint"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "deploy",
+        "name": "Deploy and observe",
+        "owns": [
+          "minifleet/deploy.py",
+          "tests/test_deploy.py"
+        ],
+        "responsibility": "Implement minifleet/deploy.py: supervised process launch with ready detection, plus smoke and soak probes.",
+        "tests": [
+          "tests that spawn a real child process and a real in-process HTTP server"
+        ]
+      },
+      {
+        "acceptance_ids": [
+          "A-5"
+        ],
+        "contract_ids": [
+          "C-V02"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "summarize returns every documented key for a realistic run record",
+          "the critical path follows depends_on edges and is not the sum of all durations",
+          "an empty run summarises without raising"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "fleetmetrics",
+        "name": "Fleet metrics",
+        "owns": [
+          "minifleet/fleetmetrics.py",
+          "tests/test_fleetmetrics.py"
+        ],
+        "responsibility": "Implement minifleet/fleetmetrics.py: account for a run - attempts, retries, gate outcomes and the critical path.",
+        "tests": [
+          "unit tests over synthetic run records, including a branching graph"
+        ]
+      },
+      {
+        "acceptance_ids": [
+          "A-6",
+          "A-7"
+        ],
+        "contract_ids": [
+          "C-V02"
+        ],
+        "depends_on": [
+          "repair",
+          "deploy",
+          "fleetmetrics"
+        ],
+        "done_when": [
+          "python3 -m minifleet --help lists repair, deploy and fleetmetrics",
+          "repair writes packets/<task>.repair.json for each failed task and prints 'no failed tasks' otherwise",
+          "deploy starts a command, waits for its ready line, probes it, prints JSON and always tears it down",
+          "fleetmetrics prints the summarize() JSON",
+          "every pre-existing subcommand and its behaviour is preserved"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "wiring",
+        "name": "CLI and scheduler wiring",
+        "owns": [
+          "minifleet/cli.py",
+          "minifleet/scheduler.py",
+          "tests/test_wiring.py"
+        ],
+        "responsibility": "Wire the three new modules into the CLI (repair, deploy, fleetmetrics subcommands) and into the scheduler, without changing existing behaviour.",
+        "tests": [
+          "a CLI-level test that drives the fixture run directory through the new subcommands"
+        ]
+      }
+    ],
+    "contracts": [
+      {
+        "content": "## Behavioural notes\n\n### repair\n`failing_gates` contains every evidence entry whose status is not `pass`, sorted by `gate_id`. `instructions` is a non-empty list of short, imperative sentences that name the failing gate ids so a worker can act without reading the ledger. `scope` is a copy of `task['owns']`. `carry_forward` is a copy of `task.get('submitted_files', [])`. `escalate` is True when `attempt >= max_attempts`. `reason` is a one-line summary of the failure. The function must not mutate `task` or `evidence`.\n\n### deploy\n`Supervisor.wait_ready()` reads the child's stdout line by line until a line starts with `ready_prefix`, parses the JSON payload after it (so `{\"port\": 4242}` yields `port=4242`), and returns within `timeout` seconds. On timeout it returns `ready: False` and a `stdout_tail` of what was seen; it must not hang and must leave `running` False after `stop()`. `stop()` sends SIGTERM, waits up to its timeout, escalates to SIGKILL if needed, and returns the exit code.\n`smoke(url)` performs one GET and returns the status code, whether it was 2xx (`ok`), and the elapsed seconds. `soak(url, seconds, interval)` repeats GETs until `seconds` have elapsed, counts samples and failures (non-2xx counts as a failure), and reports `p50_ms`/`max_ms`. A dead endpoint must produce failures rather than an exception.\n\n### fleetmetrics\n`summarize(run)` takes a decoded `run.json`. `critical_path_seconds` is the longest chain of task durations following `depends_on` edges - it is not the sum of all durations. Task duration is `finished_at - started_at`, treated as 0 when either bound is missing. `slowest_task` is the task with the largest duration, or None when there are no tasks. `retries` is the sum of `max(attempts - 1, 0)`. `merged` counts tasks in state `merged`.\n\n### CLI\n`repair` must work on a run directory that contains only `run.json` plus a `packets/` directory, creating `packets/` if needed. It must not require a git repository.",
+        "exports": {
+          "minifleet cli": "python3 -m minifleet repair --run DIR writes packets/<task>.repair.json for every failed task and prints 'no failed tasks' when there are none; python3 -m minifleet deploy --dir DIR --cmd CMD --probe PATH [--seconds N] starts the process, waits for its ready line, smokes and soaks the probe path, prints a JSON report and exits non-zero when the probe fails; python3 -m minifleet fleetmetrics --run DIR prints the summarize() JSON on stdout",
+          "minifleet.deploy.Supervisor": "Supervisor(argv: list[str], cwd: str, ready_prefix: str = 'MINIFLEET_READY', timeout: float = 30.0) with .start() -> Supervisor, .wait_ready() -> {'ready': bool, 'port': int|None, 'seconds': float, 'stdout_tail': str}, .stop(timeout: float = 10.0) -> int, .running -> bool",
+          "minifleet.deploy.smoke": "smoke(url: str, timeout: float = 5.0) -> {'status': int, 'ok': bool, 'seconds': float}",
+          "minifleet.deploy.soak": "soak(url: str, seconds: float, interval: float = 0.25, timeout: float = 5.0) -> {'samples': int, 'failures': int, 'ok': bool, 'p50_ms': float, 'max_ms': float}",
+          "minifleet.fleetmetrics.summarize": "summarize(run: dict) -> {'tasks': int, 'merged': int, 'failed': int, 'attempts_total': int, 'retries': int, 'gates_total': int, 'gates_passed': int, 'gates_failed': int, 'critical_path_seconds': float, 'slowest_task': {'id': str, 'seconds': float} | None, 'verdict': str}",
+          "minifleet.repair.build_repair_packet": "build_repair_packet(task: dict, evidence: list[dict], attempt: int, max_attempts: int = 3) -> dict with keys task_id, attempt, max_attempts, escalate, reason, failing_gates[{gate_id,status,detail}], instructions[list[str]], scope[list[str]], carry_forward[list[str]]"
+        },
+        "frozen": true,
+        "id": "C-V02",
+        "path": "contracts/C-V02.md",
+        "summary": "Frozen interfaces for the three v0.2 modules and the CLI surface that exposes them."
+      }
+    ],
+    "decisions": [
+      "acceptance criteria are owned by the verification layer, never by the worker that writes the code",
+      "every task has a single writer and a disjoint write scope; concurrency without ownership is a merge queue",
+      "frozen contracts: C-V02"
+    ],
+    "gates": [
+      {
+        "cmd": "python3 -m unittest discover -s tests -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-unit",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "task",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "worker's own tests plus the baseline suite"
+      },
+      {
+        "cmd": "python3 -m unittest harness.test_contract -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-contract",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "v0.2 contract conformance"
+      },
+      {
+        "cmd": "python3 -m unittest harness.test_wiring -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-wiring",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "CLI wiring"
+      },
+      {
+        "cmd": "python3 -m unittest discover -s tests",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-regression",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "engine regression on the integrated tree"
+      },
+      {
+        "cmd": "python3 -m harness.bench",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-bench",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "measure the regression suite"
+      },
+      {
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-budget-bench",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "budget",
+        "metric": "engine_tests_ms",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 60000.0,
+        "timeout": 300.0,
+        "title": "regression suite stays cheap"
+      },
+      {
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-layout",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "files",
+        "metric": "",
+        "op": "<=",
+        "paths": [
+          "minifleet/repair.py",
+          "minifleet/deploy.py",
+          "minifleet/fleetmetrics.py",
+          "ACCEPTANCE.md"
+        ],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 300.0,
+        "title": "new modules present"
+      }
+    ],
+    "intent_id": "minifleet-v02",
+    "repairs": [],
+    "risks": [
+      "wide task graph: integration cost grows with the number of writers",
+      "non-functional criteria are only as trustworthy as the measurement harness"
+    ],
+    "tasks": [
+      {
+        "acceptance_ids": [
+          "A-1",
+          "A-2"
+        ],
+        "attempts": 1,
+        "branch": "task/repair-a2",
+        "component_id": "repair",
+        "contract_ids": [
+          "C-V02"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "build_repair_packet matches the frozen signature and returns every documented key",
+          "failing gates are ordered by gate_id and exclude every passing gate",
+          "instructions name each failing gate id",
+          "the attempt budget is respected: escalate is set once it is exhausted",
+          "inputs are not mutated"
+        ],
+        "evidence": [
+          {
+            "artifacts": [
+              "runs/20260910T114536Z-minifleet-v02-40d5be/evidence/G-unit.json"
+            ],
+            "detail": "exit=0 (expected [0])",
+            "duration_s": 0.5396463871002197,
+            "exit_code": 0,
+            "gate_id": "G-unit",
+            "metrics": {},
+            "output_tail": "\ntest_batches_respect_dependencies (test_engine.ArchitectTests.test_batches_respect_dependencies) ... ok\ntest_cycle_is_repaired (test_engine.ArchitectTests.test_cycle_is_repaired) ... ok\ntest_missing_gate_is_repaired_and_recorded (test_engine.ArchitectTests.test_missing_gate_is_repaired_and_recorded) ... ok\ntest_full_run_passes_and_is_auditable (test_engine.EndToEndTests.test_full_run_passes_and_is_auditable) ... ok\ntest_reopened_task_starts_from_the_current_baseline (test_engine.EndToEndTests.test_reopened_task_starts_from_the_current_baseline)\nA second attempt must not be handed the tree from the first attempt. ... ok\ntest_scope_violation_is_caught_before_merge (test_engine.EndToEndTests.test_scope_violation_is_caught_before_merge) ... ok\ntest_budget_gate_fails_when_metric_missing (test_engine.GateTests.test_budget_gate_fails_when_metric_missing) ... ok\ntest_cmd_gate_captures_metrics (test_engine.GateTests.test_cmd_gate_captures_metrics) ... ok\ntest_files_and_json_gates (test_engine.GateTests.test_files_and_json_gates) ... ok\ntest_metric_parser_ignores_noise (test_engine.GateTests.test_metric_parser_ignores_noise) ... ok\ntest_verdict_requires_all_required_evidence (test_engine.GateTests.test_verdict_requires_all_required_evidence) ... ok\ntest_budget_without_gate_is_rejected_by_helper (test_engine.IntentTests.test_budget_without_gate_is_rejected_by_helper) ... ok\ntest_overlapping_write_scope_is_fatal (test_engine.IntentTests.test_overlapping_write_scope_is_fatal) ... ok\ntest_unknown_gate_reference_is_fatal (test_engine.IntentTests.test_unknown_gate_reference_is_fatal) ... ok\ntest_ownership_conflict_detection (test_engine.WorktreeTests.test_ownership_conflict_detection) ... ok\ntest_only_failing_gates_are_kept_and_ordered (test_repair.FailingGateTests.test_only_failing_gates_are_kept_and_ordered) ... ok\ntest_pass_status_only_filter_is_exact (test_repair.FailingGateTests.test_pass_status_only_filter_is_exact) ... ok\ntest_attempt_budget_is_bounded (test_repair.RepairPacketTests.test_attempt_budget_is_bounded) ... ok\ntest_empty_evidence_still_produces_a_usable_packet (test_repair.RepairPacketTests.test_empty_evidence_still_produces_a_usable_packet) ... ok\ntest_inputs_are_not_mutated (test_repair.RepairPacketTests.test_inputs_are_not_mutated) ... ok\ntest_instructions_name_every_failing_gate (test_repair.RepairPacketTests.test_instructions_name_every_failing_gate) ... ok\ntest_markdown_renders_the_escalation (test_repair.RepairPacketTests.test_markdown_renders_the_escalation) ... ok\ntest_scope_and_carry_forward_are_copies (test_repair.RepairPacketTests.test_scope_and_carry_forward_are_copies) ... ok\ntest_shape_ordering_and_scope (test_repair.RepairPacketTests.test_shape_ordering_and_scope) ... ok\n\n----------------------------------------------------------------------\nRan 24 tests in 0.432s\n\nOK\n",
+            "recorded_at": 1789040841.8561575,
+            "status": "pass",
+            "task_id": "T-repair"
+          }
+        ],
+        "finished_at": 1789040841.8564966,
+        "gate_ids": [
+          "G-unit"
+        ],
+        "goal": "Implement minifleet/repair.py, turning gate evidence into an actionable, bounded repair packet.",
+        "id": "T-repair",
+        "notes": "",
+        "owns": [
+          "minifleet/repair.py",
+          "tests/test_repair.py"
+        ],
+        "role": "builder",
+        "started_at": 1789040741.3119662,
+        "state": "merged",
+        "submitted_files": [
+          "minifleet/repair.py",
+          "tests/test_repair.py"
+        ],
+        "tests": [
+          "unit tests covering ordering, escalation, empty evidence and non-mutation"
+        ],
+        "title": "Bounded self-repair",
+        "worktree": "/home/user/workspace/minifleet/runs/20260910T114536Z-minifleet-v02-40d5be/worktrees/repair"
+      },
+      {
+        "acceptance_ids": [
+          "A-3",
+          "A-4"
+        ],
+        "attempts": 1,
+        "branch": "task/deploy-a2",
+        "component_id": "deploy",
+        "contract_ids": [
+          "C-V02"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "Supervisor.start/wait_ready/stop behave as specified and never leak a child process",
+          "a missing ready line returns ready False within the timeout instead of hanging",
+          "smoke reports status, ok and elapsed time",
+          "soak reports samples, failures, ok, p50_ms and max_ms, and survives a dead endpoint"
+        ],
+        "evidence": [
+          {
+            "artifacts": [
+              "runs/20260910T114536Z-minifleet-v02-40d5be/evidence/G-unit.json"
+            ],
+            "detail": "exit=0 (expected [0])",
+            "duration_s": 3.7401225566864014,
+            "exit_code": 0,
+            "gate_id": "G-unit",
+            "metrics": {},
+            "output_tail": "\ntest_smoke_reports_status_ok_and_seconds (test_deploy.ProbeTests.test_smoke_reports_status_ok_and_seconds) ... ok\ntest_soak_counts_samples_and_reports_latency (test_deploy.ProbeTests.test_soak_counts_samples_and_reports_latency) ... ok\ntest_soak_flags_a_dead_endpoint_instead_of_raising (test_deploy.ProbeTests.test_soak_flags_a_dead_endpoint_instead_of_raising) ... ok\ntest_soak_flags_error_responses (test_deploy.ProbeTests.test_soak_flags_error_responses) ... ok\ntest_child_that_exits_early_reports_not_ready (test_deploy.SupervisorTests.test_child_that_exits_early_reports_not_ready) ... ok\ntest_missing_ready_line_times_out_without_hanging (test_deploy.SupervisorTests.test_missing_ready_line_times_out_without_hanging) ... ok\ntest_ready_line_is_parsed_and_the_child_is_torn_down (test_deploy.SupervisorTests.test_ready_line_is_parsed_and_the_child_is_torn_down) ... ok\ntest_ready_line_without_a_payload_yields_no_port (test_deploy.SupervisorTests.test_ready_line_without_a_payload_yields_no_port) ... ok\ntest_soak_style_kill_escalation_when_the_child_ignores_sigterm (test_deploy.SupervisorTests.test_soak_style_kill_escalation_when_the_child_ignores_sigterm) ... ok\ntest_batches_respect_dependencies (test_engine.ArchitectTests.test_batches_respect_dependencies) ... ok\ntest_cycle_is_repaired (test_engine.ArchitectTests.test_cycle_is_repaired) ... ok\ntest_missing_gate_is_repaired_and_recorded (test_engine.ArchitectTests.test_missing_gate_is_repaired_and_recorded) ... ok\ntest_full_run_passes_and_is_auditable (test_engine.EndToEndTests.test_full_run_passes_and_is_auditable) ... ok\ntest_reopened_task_starts_from_the_current_baseline (test_engine.EndToEndTests.test_reopened_task_starts_from_the_current_baseline)\nA second attempt must not be handed the tree from the first attempt. ... ok\ntest_scope_violation_is_caught_before_merge (test_engine.EndToEndTests.test_scope_violation_is_caught_before_merge) ... ok\ntest_budget_gate_fails_when_metric_missing (test_engine.GateTests.test_budget_gate_fails_when_metric_missing) ... ok\ntest_cmd_gate_captures_metrics (test_engine.GateTests.test_cmd_gate_captures_metrics) ... ok\ntest_files_and_json_gates (test_engine.GateTests.test_files_and_json_gates) ... ok\ntest_metric_parser_ignores_noise (test_engine.GateTests.test_metric_parser_ignores_noise) ... ok\ntest_verdict_requires_all_required_evidence (test_engine.GateTests.test_verdict_requires_all_required_evidence) ... ok\ntest_budget_without_gate_is_rejected_by_helper (test_engine.IntentTests.test_budget_without_gate_is_rejected_by_helper) ... ok\ntest_overlapping_write_scope_is_fatal (test_engine.IntentTests.test_overlapping_write_scope_is_fatal) ... ok\ntest_unknown_gate_reference_is_fatal (test_engine.IntentTests.test_unknown_gate_reference_is_fatal) ... ok\ntest_ownership_conflict_detection (test_engine.WorktreeTests.test_ownership_conflict_detection) ... ok\n\n----------------------------------------------------------------------\nRan 24 tests in 3.638s\n\nOK\n",
+            "recorded_at": 1789040845.719397,
+            "status": "pass",
+            "task_id": "T-deploy"
+          }
+        ],
+        "finished_at": 1789040845.7197444,
+        "gate_ids": [
+          "G-unit"
+        ],
+        "goal": "Implement minifleet/deploy.py: supervised process launch with ready detection, plus smoke and soak probes.",
+        "id": "T-deploy",
+        "notes": "",
+        "owns": [
+          "minifleet/deploy.py",
+          "tests/test_deploy.py"
+        ],
+        "role": "builder",
+        "started_at": 1789040741.3119683,
+        "state": "merged",
+        "submitted_files": [
+          "minifleet/deploy.py",
+          "tests/test_deploy.py"
+        ],
+        "tests": [
+          "tests that spawn a real child process and a real in-process HTTP server"
+        ],
+        "title": "Deploy and observe",
+        "worktree": "/home/user/workspace/minifleet/runs/20260910T114536Z-minifleet-v02-40d5be/worktrees/deploy"
+      },
+      {
+        "acceptance_ids": [
+          "A-5"
+        ],
+        "attempts": 1,
+        "branch": "task/fleetmetrics-a2",
+        "component_id": "fleetmetrics",
+        "contract_ids": [
+          "C-V02"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "summarize returns every documented key for a realistic run record",
+          "the critical path follows depends_on edges and is not the sum of all durations",
+          "an empty run summarises without raising"
+        ],
+        "evidence": [
+          {
+            "artifacts": [
+              "runs/20260910T114536Z-minifleet-v02-40d5be/evidence/G-unit.json"
+            ],
+            "detail": "exit=0 (expected [0])",
+            "duration_s": 0.5445752143859863,
+            "exit_code": 0,
+            "gate_id": "G-unit",
+            "metrics": {},
+            "output_tail": "\ntest_batches_respect_dependencies (test_engine.ArchitectTests.test_batches_respect_dependencies) ... ok\ntest_cycle_is_repaired (test_engine.ArchitectTests.test_cycle_is_repaired) ... ok\ntest_missing_gate_is_repaired_and_recorded (test_engine.ArchitectTests.test_missing_gate_is_repaired_and_recorded) ... ok\ntest_full_run_passes_and_is_auditable (test_engine.EndToEndTests.test_full_run_passes_and_is_auditable) ... ok\ntest_reopened_task_starts_from_the_current_baseline (test_engine.EndToEndTests.test_reopened_task_starts_from_the_current_baseline)\nA second attempt must not be handed the tree from the first attempt. ... ok\ntest_scope_violation_is_caught_before_merge (test_engine.EndToEndTests.test_scope_violation_is_caught_before_merge) ... ok\ntest_budget_gate_fails_when_metric_missing (test_engine.GateTests.test_budget_gate_fails_when_metric_missing) ... ok\ntest_cmd_gate_captures_metrics (test_engine.GateTests.test_cmd_gate_captures_metrics) ... ok\ntest_files_and_json_gates (test_engine.GateTests.test_files_and_json_gates) ... ok\ntest_metric_parser_ignores_noise (test_engine.GateTests.test_metric_parser_ignores_noise) ... ok\ntest_verdict_requires_all_required_evidence (test_engine.GateTests.test_verdict_requires_all_required_evidence) ... ok\ntest_budget_without_gate_is_rejected_by_helper (test_engine.IntentTests.test_budget_without_gate_is_rejected_by_helper) ... ok\ntest_overlapping_write_scope_is_fatal (test_engine.IntentTests.test_overlapping_write_scope_is_fatal) ... ok\ntest_unknown_gate_reference_is_fatal (test_engine.IntentTests.test_unknown_gate_reference_is_fatal) ... ok\ntest_ownership_conflict_detection (test_engine.WorktreeTests.test_ownership_conflict_detection) ... ok\ntest_cycle_does_not_hang_the_report (test_fleetmetrics.CriticalPathTests.test_cycle_does_not_hang_the_report) ... ok\ntest_longest_chain_wins_not_the_sum (test_fleetmetrics.CriticalPathTests.test_longest_chain_wins_not_the_sum) ... ok\ntest_missing_dependencies_and_bounds_are_tolerated (test_fleetmetrics.CriticalPathTests.test_missing_dependencies_and_bounds_are_tolerated) ... ok\ntest_a_run_without_a_design_or_evidence_is_tolerated (test_fleetmetrics.SummarizeTests.test_a_run_without_a_design_or_evidence_is_tolerated) ... ok\ntest_an_empty_run_summarises_without_raising (test_fleetmetrics.SummarizeTests.test_an_empty_run_summarises_without_raising) ... ok\ntest_counts_attempts_retries_gates_and_states (test_fleetmetrics.SummarizeTests.test_counts_attempts_retries_gates_and_states) ... ok\ntest_every_documented_key_is_present (test_fleetmetrics.SummarizeTests.test_every_documented_key_is_present) ... ok\n\n----------------------------------------------------------------------\nRan 22 tests in 0.436s\n\nOK\n",
+            "recorded_at": 1789040846.3873687,
+            "status": "pass",
+            "task_id": "T-fleetmetrics"
+          }
+        ],
+        "finished_at": 1789040846.3883948,
+        "gate_ids": [
+          "G-unit"
+        ],
+        "goal": "Implement minifleet/fleetmetrics.py: account for a run - attempts, retries, gate outcomes and the critical path.",
+        "id": "T-fleetmetrics",
+        "notes": "",
+        "owns": [
+          "minifleet/fleetmetrics.py",
+          "tests/test_fleetmetrics.py"
+        ],
+        "role": "builder",
+        "started_at": 1789040741.3119688,
+        "state": "merged",
+        "submitted_files": [
+          "minifleet/fleetmetrics.py",
+          "tests/test_fleetmetrics.py"
+        ],
+        "tests": [
+          "unit tests over synthetic run records, including a branching graph"
+        ],
+        "title": "Fleet metrics",
+        "worktree": "/home/user/workspace/minifleet/runs/20260910T114536Z-minifleet-v02-40d5be/worktrees/fleetmetrics"
+      },
+      {
+        "acceptance_ids": [
+          "A-6",
+          "A-7"
+        ],
+        "attempts": 1,
+        "branch": "task/wiring",
+        "component_id": "wiring",
+        "contract_ids": [
+          "C-V02"
+        ],
+        "depends_on": [
+          "T-repair",
+          "T-deploy",
+          "T-fleetmetrics"
+        ],
+        "done_when": [
+          "python3 -m minifleet --help lists repair, deploy and fleetmetrics",
+          "repair writes packets/<task>.repair.json for each failed task and prints 'no failed tasks' otherwise",
+          "deploy starts a command, waits for its ready line, probes it, prints JSON and always tears it down",
+          "fleetmetrics prints the summarize() JSON",
+          "every pre-existing subcommand and its behaviour is preserved"
+        ],
+        "evidence": [
+          {
+            "artifacts": [
+              "runs/20260910T114536Z-minifleet-v02-40d5be/evidence/G-unit.json"
+            ],
+            "detail": "exit=0 (expected [0])",
+            "duration_s": 6.683567047119141,
+            "exit_code": 0,
+            "gate_id": "G-unit",
+            "metrics": {},
+            "output_tail": "ine.EndToEndTests.test_scope_violation_is_caught_before_merge) ... ok\ntest_budget_gate_fails_when_metric_missing (test_engine.GateTests.test_budget_gate_fails_when_metric_missing) ... ok\ntest_cmd_gate_captures_metrics (test_engine.GateTests.test_cmd_gate_captures_metrics) ... ok\ntest_files_and_json_gates (test_engine.GateTests.test_files_and_json_gates) ... ok\ntest_metric_parser_ignores_noise (test_engine.GateTests.test_metric_parser_ignores_noise) ... ok\ntest_verdict_requires_all_required_evidence (test_engine.GateTests.test_verdict_requires_all_required_evidence) ... ok\ntest_budget_without_gate_is_rejected_by_helper (test_engine.IntentTests.test_budget_without_gate_is_rejected_by_helper) ... ok\ntest_overlapping_write_scope_is_fatal (test_engine.IntentTests.test_overlapping_write_scope_is_fatal) ... ok\ntest_unknown_gate_reference_is_fatal (test_engine.IntentTests.test_unknown_gate_reference_is_fatal) ... ok\ntest_ownership_conflict_detection (test_engine.WorktreeTests.test_ownership_conflict_detection) ... ok\ntest_cycle_does_not_hang_the_report (test_fleetmetrics.CriticalPathTests.test_cycle_does_not_hang_the_report) ... ok\ntest_longest_chain_wins_not_the_sum (test_fleetmetrics.CriticalPathTests.test_longest_chain_wins_not_the_sum) ... ok\ntest_missing_dependencies_and_bounds_are_tolerated (test_fleetmetrics.CriticalPathTests.test_missing_dependencies_and_bounds_are_tolerated) ... ok\ntest_a_run_without_a_design_or_evidence_is_tolerated (test_fleetmetrics.SummarizeTests.test_a_run_without_a_design_or_evidence_is_tolerated) ... ok\ntest_an_empty_run_summarises_without_raising (test_fleetmetrics.SummarizeTests.test_an_empty_run_summarises_without_raising) ... ok\ntest_counts_attempts_retries_gates_and_states (test_fleetmetrics.SummarizeTests.test_counts_attempts_retries_gates_and_states) ... ok\ntest_every_documented_key_is_present (test_fleetmetrics.SummarizeTests.test_every_documented_key_is_present) ... ok\ntest_only_failing_gates_are_kept_and_ordered (test_repair.FailingGateTests.test_only_failing_gates_are_kept_and_ordered) ... ok\ntest_pass_status_only_filter_is_exact (test_repair.FailingGateTests.test_pass_status_only_filter_is_exact) ... ok\ntest_attempt_budget_is_bounded (test_repair.RepairPacketTests.test_attempt_budget_is_bounded) ... ok\ntest_empty_evidence_still_produces_a_usable_packet (test_repair.RepairPacketTests.test_empty_evidence_still_produces_a_usable_packet) ... ok\ntest_inputs_are_not_mutated (test_repair.RepairPacketTests.test_inputs_are_not_mutated) ... ok\ntest_instructions_name_every_failing_gate (test_repair.RepairPacketTests.test_instructions_name_every_failing_gate) ... ok\ntest_markdown_renders_the_escalation (test_repair.RepairPacketTests.test_markdown_renders_the_escalation) ... ok\ntest_scope_and_carry_forward_are_copies (test_repair.RepairPacketTests.test_scope_and_carry_forward_are_copies) ... ok\ntest_shape_ordering_and_scope (test_repair.RepairPacketTests.test_shape_ordering_and_scope) ... ok\ntest_deploy_fails_loudly_when_the_probe_fails (test_wiring.CliTests.test_deploy_fails_loudly_when_the_probe_fails) ... ok\ntest_deploy_fails_when_no_ready_line_arrives (test_wiring.CliTests.test_deploy_fails_when_no_ready_line_arrives) ... ok\ntest_deploy_starts_waits_probes_and_tears_down (test_wiring.CliTests.test_deploy_starts_waits_probes_and_tears_down) ... ok\ntest_fleetmetrics_prints_the_summary (test_wiring.CliTests.test_fleetmetrics_prints_the_summary) ... ok\ntest_help_lists_the_new_capabilities (test_wiring.CliTests.test_help_lists_the_new_capabilities) ... ok\ntest_repair_escalates_once_the_budget_is_spent (test_wiring.CliTests.test_repair_escalates_once_the_budget_is_spent) ... ok\ntest_repair_is_clean_when_nothing_failed (test_wiring.CliTests.test_repair_is_clean_when_nothing_failed) ... ok\ntest_repair_writes_one_packet_per_failed_task (test_wiring.CliTests.test_repair_writes_one_packet_per_failed_task) ... ok\n\n----------------------------------------------------------------------\nRan 48 tests in 6.581s\n\nOK\n",
+            "recorded_at": 1789040897.399168,
+            "status": "pass",
+            "task_id": "T-wiring"
+          }
+        ],
+        "finished_at": 1789040897.3995957,
+        "gate_ids": [
+          "G-unit"
+        ],
+        "goal": "Wire the three new modules into the CLI (repair, deploy, fleetmetrics subcommands) and into the scheduler, without changing existing behaviour.",
+        "id": "T-wiring",
+        "notes": "",
+        "owns": [
+          "minifleet/cli.py",
+          "minifleet/scheduler.py",
+          "tests/test_wiring.py"
+        ],
+        "role": "builder",
+        "started_at": 1789040848.799436,
+        "state": "merged",
+        "submitted_files": [
+          "minifleet/cli.py",
+          "minifleet/scheduler.py",
+          "tests/test_wiring.py"
+        ],
+        "tests": [
+          "a CLI-level test that drives the fixture run directory through the new subcommands"
+        ],
+        "title": "CLI and scheduler wiring",
+        "worktree": "/home/user/workspace/minifleet/runs/20260910T114536Z-minifleet-v02-40d5be/worktrees/wiring"
+      }
+    ]
+  },
+  "dispatcher": "packet",
+  "events": [
+    {
+      "dispatcher": "packet",
+      "event": "run.created",
+      "intent": "minifleet-v02",
+      "t": 1789040736.9182336
+    },
+    {
+      "event": "tasks.ready",
+      "t": 1789040737.039004,
+      "tasks": [
+        "T-repair",
+        "T-deploy",
+        "T-fleetmetrics"
+      ]
+    },
+    {
+      "commit": "1fcff739d22cde3433ae91b299a9da900b96ca04",
+      "event": "task.submitted",
+      "files": [
+        "minifleet/repair.py",
+        "tests/test_repair.py"
+      ],
+      "notes": "implemented per packet",
+      "t": 1789040841.3162801,
+      "task": "T-repair",
+      "worker": "okou-cli"
+    },
+    {
+      "commit": "6435fc0c3816c25942c8fa9e6a82edfb5eb4274e",
+      "event": "task.submitted",
+      "files": [
+        "minifleet/deploy.py",
+        "tests/test_deploy.py"
+      ],
+      "notes": "implemented per packet",
+      "t": 1789040841.979017,
+      "task": "T-deploy",
+      "worker": "okou-cli"
+    },
+    {
+      "commit": "0569784f04ac47e8bb4df1aea3080eaa63189f24",
+      "event": "task.submitted",
+      "files": [
+        "minifleet/fleetmetrics.py",
+        "tests/test_fleetmetrics.py"
+      ],
+      "notes": "implemented per packet",
+      "t": 1789040845.8425338,
+      "task": "T-fleetmetrics",
+      "worker": "okou-cli"
+    },
+    {
+      "branch": "task/deploy-a2",
+      "event": "task.merged",
+      "t": 1789040848.6315348,
+      "task": "T-deploy"
+    },
+    {
+      "branch": "task/fleetmetrics-a2",
+      "event": "task.merged",
+      "t": 1789040848.641946,
+      "task": "T-fleetmetrics"
+    },
+    {
+      "branch": "task/repair-a2",
+      "event": "task.merged",
+      "t": 1789040848.6526632,
+      "task": "T-repair"
+    },
+    {
+      "event": "tasks.ready",
+      "t": 1789040848.652805,
+      "tasks": [
+        "T-wiring"
+      ]
+    },
+    {
+      "commit": "5ffe824f31759e9b03d2aa0b3b727d45966a7d84",
+      "event": "task.submitted",
+      "files": [
+        "minifleet/cli.py",
+        "minifleet/scheduler.py",
+        "tests/test_wiring.py"
+      ],
+      "notes": "cli + scheduler wiring",
+      "t": 1789040890.715404,
+      "task": "T-wiring",
+      "worker": "okou-cli"
+    },
+    {
+      "branch": "task/wiring",
+      "event": "task.merged",
+      "t": 1789040897.5212631,
+      "task": "T-wiring"
+    },
+    {
+      "event": "system.verified",
+      "gates": {
+        "G-bench": "pass",
+        "G-budget-bench": "pass",
+        "G-contract": "pass",
+        "G-layout": "pass",
+        "G-regression": "pass",
+        "G-wiring": "pass"
+      },
+      "t": 1789040915.8906891,
+      "verdict": "pass: all required gates green"
+    }
+  ],
+  "evidence": [
+    {
+      "artifacts": [
+        "runs/20260910T114536Z-minifleet-v02-40d5be/evidence/G-unit.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 0.5396463871002197,
+      "exit_code": 0,
+      "gate_id": "G-unit",
+      "metrics": {},
+      "output_tail": "\ntest_batches_respect_dependencies (test_engine.ArchitectTests.test_batches_respect_dependencies) ... ok\ntest_cycle_is_repaired (test_engine.ArchitectTests.test_cycle_is_repaired) ... ok\ntest_missing_gate_is_repaired_and_recorded (test_engine.ArchitectTests.test_missing_gate_is_repaired_and_recorded) ... ok\ntest_full_run_passes_and_is_auditable (test_engine.EndToEndTests.test_full_run_passes_and_is_auditable) ... ok\ntest_reopened_task_starts_from_the_current_baseline (test_engine.EndToEndTests.test_reopened_task_starts_from_the_current_baseline)\nA second attempt must not be handed the tree from the first attempt. ... ok\ntest_scope_violation_is_caught_before_merge (test_engine.EndToEndTests.test_scope_violation_is_caught_before_merge) ... ok\ntest_budget_gate_fails_when_metric_missing (test_engine.GateTests.test_budget_gate_fails_when_metric_missing) ... ok\ntest_cmd_gate_captures_metrics (test_engine.GateTests.test_cmd_gate_captures_metrics) ... ok\ntest_files_and_json_gates (test_engine.GateTests.test_files_and_json_gates) ... ok\ntest_metric_parser_ignores_noise (test_engine.GateTests.test_metric_parser_ignores_noise) ... ok\ntest_verdict_requires_all_required_evidence (test_engine.GateTests.test_verdict_requires_all_required_evidence) ... ok\ntest_budget_without_gate_is_rejected_by_helper (test_engine.IntentTests.test_budget_without_gate_is_rejected_by_helper) ... ok\ntest_overlapping_write_scope_is_fatal (test_engine.IntentTests.test_overlapping_write_scope_is_fatal) ... ok\ntest_unknown_gate_reference_is_fatal (test_engine.IntentTests.test_unknown_gate_reference_is_fatal) ... ok\ntest_ownership_conflict_detection (test_engine.WorktreeTests.test_ownership_conflict_detection) ... ok\ntest_only_failing_gates_are_kept_and_ordered (test_repair.FailingGateTests.test_only_failing_gates_are_kept_and_ordered) ... ok\ntest_pass_status_only_filter_is_exact (test_repair.FailingGateTests.test_pass_status_only_filter_is_exact) ... ok\ntest_attempt_budget_is_bounded (test_repair.RepairPacketTests.test_attempt_budget_is_bounded) ... ok\ntest_empty_evidence_still_produces_a_usable_packet (test_repair.RepairPacketTests.test_empty_evidence_still_produces_a_usable_packet) ... ok\ntest_inputs_are_not_mutated (test_repair.RepairPacketTests.test_inputs_are_not_mutated) ... ok\ntest_instructions_name_every_failing_gate (test_repair.RepairPacketTests.test_instructions_name_every_failing_gate) ... ok\ntest_markdown_renders_the_escalation (test_repair.RepairPacketTests.test_markdown_renders_the_escalation) ... ok\ntest_scope_and_carry_forward_are_copies (test_repair.RepairPacketTests.test_scope_and_carry_forward_are_copies) ... ok\ntest_shape_ordering_and_scope (test_repair.RepairPacketTests.test_shape_ordering_and_scope) ... ok\n\n----------------------------------------------------------------------\nRan 24 tests in 0.432s\n\nOK\n",
+      "recorded_at": 1789040841.8561575,
+      "status": "pass",
+      "task_id": "T-repair"
+    },
+    {
+      "artifacts": [
+        "runs/20260910T114536Z-minifleet-v02-40d5be/evidence/G-unit.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 3.7401225566864014,
+      "exit_code": 0,
+      "gate_id": "G-unit",
+      "metrics": {},
+      "output_tail": "\ntest_smoke_reports_status_ok_and_seconds (test_deploy.ProbeTests.test_smoke_reports_status_ok_and_seconds) ... ok\ntest_soak_counts_samples_and_reports_latency (test_deploy.ProbeTests.test_soak_counts_samples_and_reports_latency) ... ok\ntest_soak_flags_a_dead_endpoint_instead_of_raising (test_deploy.ProbeTests.test_soak_flags_a_dead_endpoint_instead_of_raising) ... ok\ntest_soak_flags_error_responses (test_deploy.ProbeTests.test_soak_flags_error_responses) ... ok\ntest_child_that_exits_early_reports_not_ready (test_deploy.SupervisorTests.test_child_that_exits_early_reports_not_ready) ... ok\ntest_missing_ready_line_times_out_without_hanging (test_deploy.SupervisorTests.test_missing_ready_line_times_out_without_hanging) ... ok\ntest_ready_line_is_parsed_and_the_child_is_torn_down (test_deploy.SupervisorTests.test_ready_line_is_parsed_and_the_child_is_torn_down) ... ok\ntest_ready_line_without_a_payload_yields_no_port (test_deploy.SupervisorTests.test_ready_line_without_a_payload_yields_no_port) ... ok\ntest_soak_style_kill_escalation_when_the_child_ignores_sigterm (test_deploy.SupervisorTests.test_soak_style_kill_escalation_when_the_child_ignores_sigterm) ... ok\ntest_batches_respect_dependencies (test_engine.ArchitectTests.test_batches_respect_dependencies) ... ok\ntest_cycle_is_repaired (test_engine.ArchitectTests.test_cycle_is_repaired) ... ok\ntest_missing_gate_is_repaired_and_recorded (test_engine.ArchitectTests.test_missing_gate_is_repaired_and_recorded) ... ok\ntest_full_run_passes_and_is_auditable (test_engine.EndToEndTests.test_full_run_passes_and_is_auditable) ... ok\ntest_reopened_task_starts_from_the_current_baseline (test_engine.EndToEndTests.test_reopened_task_starts_from_the_current_baseline)\nA second attempt must not be handed the tree from the first attempt. ... ok\ntest_scope_violation_is_caught_before_merge (test_engine.EndToEndTests.test_scope_violation_is_caught_before_merge) ... ok\ntest_budget_gate_fails_when_metric_missing (test_engine.GateTests.test_budget_gate_fails_when_metric_missing) ... ok\ntest_cmd_gate_captures_metrics (test_engine.GateTests.test_cmd_gate_captures_metrics) ... ok\ntest_files_and_json_gates (test_engine.GateTests.test_files_and_json_gates) ... ok\ntest_metric_parser_ignores_noise (test_engine.GateTests.test_metric_parser_ignores_noise) ... ok\ntest_verdict_requires_all_required_evidence (test_engine.GateTests.test_verdict_requires_all_required_evidence) ... ok\ntest_budget_without_gate_is_rejected_by_helper (test_engine.IntentTests.test_budget_without_gate_is_rejected_by_helper) ... ok\ntest_overlapping_write_scope_is_fatal (test_engine.IntentTests.test_overlapping_write_scope_is_fatal) ... ok\ntest_unknown_gate_reference_is_fatal (test_engine.IntentTests.test_unknown_gate_reference_is_fatal) ... ok\ntest_ownership_conflict_detection (test_engine.WorktreeTests.test_ownership_conflict_detection) ... ok\n\n----------------------------------------------------------------------\nRan 24 tests in 3.638s\n\nOK\n",
+      "recorded_at": 1789040845.719397,
+      "status": "pass",
+      "task_id": "T-deploy"
+    },
+    {
+      "artifacts": [
+        "runs/20260910T114536Z-minifleet-v02-40d5be/evidence/G-unit.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 0.5445752143859863,
+      "exit_code": 0,
+      "gate_id": "G-unit",
+      "metrics": {},
+      "output_tail": "\ntest_batches_respect_dependencies (test_engine.ArchitectTests.test_batches_respect_dependencies) ... ok\ntest_cycle_is_repaired (test_engine.ArchitectTests.test_cycle_is_repaired) ... ok\ntest_missing_gate_is_repaired_and_recorded (test_engine.ArchitectTests.test_missing_gate_is_repaired_and_recorded) ... ok\ntest_full_run_passes_and_is_auditable (test_engine.EndToEndTests.test_full_run_passes_and_is_auditable) ... ok\ntest_reopened_task_starts_from_the_current_baseline (test_engine.EndToEndTests.test_reopened_task_starts_from_the_current_baseline)\nA second attempt must not be handed the tree from the first attempt. ... ok\ntest_scope_violation_is_caught_before_merge (test_engine.EndToEndTests.test_scope_violation_is_caught_before_merge) ... ok\ntest_budget_gate_fails_when_metric_missing (test_engine.GateTests.test_budget_gate_fails_when_metric_missing) ... ok\ntest_cmd_gate_captures_metrics (test_engine.GateTests.test_cmd_gate_captures_metrics) ... ok\ntest_files_and_json_gates (test_engine.GateTests.test_files_and_json_gates) ... ok\ntest_metric_parser_ignores_noise (test_engine.GateTests.test_metric_parser_ignores_noise) ... ok\ntest_verdict_requires_all_required_evidence (test_engine.GateTests.test_verdict_requires_all_required_evidence) ... ok\ntest_budget_without_gate_is_rejected_by_helper (test_engine.IntentTests.test_budget_without_gate_is_rejected_by_helper) ... ok\ntest_overlapping_write_scope_is_fatal (test_engine.IntentTests.test_overlapping_write_scope_is_fatal) ... ok\ntest_unknown_gate_reference_is_fatal (test_engine.IntentTests.test_unknown_gate_reference_is_fatal) ... ok\ntest_ownership_conflict_detection (test_engine.WorktreeTests.test_ownership_conflict_detection) ... ok\ntest_cycle_does_not_hang_the_report (test_fleetmetrics.CriticalPathTests.test_cycle_does_not_hang_the_report) ... ok\ntest_longest_chain_wins_not_the_sum (test_fleetmetrics.CriticalPathTests.test_longest_chain_wins_not_the_sum) ... ok\ntest_missing_dependencies_and_bounds_are_tolerated (test_fleetmetrics.CriticalPathTests.test_missing_dependencies_and_bounds_are_tolerated) ... ok\ntest_a_run_without_a_design_or_evidence_is_tolerated (test_fleetmetrics.SummarizeTests.test_a_run_without_a_design_or_evidence_is_tolerated) ... ok\ntest_an_empty_run_summarises_without_raising (test_fleetmetrics.SummarizeTests.test_an_empty_run_summarises_without_raising) ... ok\ntest_counts_attempts_retries_gates_and_states (test_fleetmetrics.SummarizeTests.test_counts_attempts_retries_gates_and_states) ... ok\ntest_every_documented_key_is_present (test_fleetmetrics.SummarizeTests.test_every_documented_key_is_present) ... ok\n\n----------------------------------------------------------------------\nRan 22 tests in 0.436s\n\nOK\n",
+      "recorded_at": 1789040846.3873687,
+      "status": "pass",
+      "task_id": "T-fleetmetrics"
+    },
+    {
+      "artifacts": [
+        "runs/20260910T114536Z-minifleet-v02-40d5be/evidence/G-unit.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 6.683567047119141,
+      "exit_code": 0,
+      "gate_id": "G-unit",
+      "metrics": {},
+      "output_tail": "ine.EndToEndTests.test_scope_violation_is_caught_before_merge) ... ok\ntest_budget_gate_fails_when_metric_missing (test_engine.GateTests.test_budget_gate_fails_when_metric_missing) ... ok\ntest_cmd_gate_captures_metrics (test_engine.GateTests.test_cmd_gate_captures_metrics) ... ok\ntest_files_and_json_gates (test_engine.GateTests.test_files_and_json_gates) ... ok\ntest_metric_parser_ignores_noise (test_engine.GateTests.test_metric_parser_ignores_noise) ... ok\ntest_verdict_requires_all_required_evidence (test_engine.GateTests.test_verdict_requires_all_required_evidence) ... ok\ntest_budget_without_gate_is_rejected_by_helper (test_engine.IntentTests.test_budget_without_gate_is_rejected_by_helper) ... ok\ntest_overlapping_write_scope_is_fatal (test_engine.IntentTests.test_overlapping_write_scope_is_fatal) ... ok\ntest_unknown_gate_reference_is_fatal (test_engine.IntentTests.test_unknown_gate_reference_is_fatal) ... ok\ntest_ownership_conflict_detection (test_engine.WorktreeTests.test_ownership_conflict_detection) ... ok\ntest_cycle_does_not_hang_the_report (test_fleetmetrics.CriticalPathTests.test_cycle_does_not_hang_the_report) ... ok\ntest_longest_chain_wins_not_the_sum (test_fleetmetrics.CriticalPathTests.test_longest_chain_wins_not_the_sum) ... ok\ntest_missing_dependencies_and_bounds_are_tolerated (test_fleetmetrics.CriticalPathTests.test_missing_dependencies_and_bounds_are_tolerated) ... ok\ntest_a_run_without_a_design_or_evidence_is_tolerated (test_fleetmetrics.SummarizeTests.test_a_run_without_a_design_or_evidence_is_tolerated) ... ok\ntest_an_empty_run_summarises_without_raising (test_fleetmetrics.SummarizeTests.test_an_empty_run_summarises_without_raising) ... ok\ntest_counts_attempts_retries_gates_and_states (test_fleetmetrics.SummarizeTests.test_counts_attempts_retries_gates_and_states) ... ok\ntest_every_documented_key_is_present (test_fleetmetrics.SummarizeTests.test_every_documented_key_is_present) ... ok\ntest_only_failing_gates_are_kept_and_ordered (test_repair.FailingGateTests.test_only_failing_gates_are_kept_and_ordered) ... ok\ntest_pass_status_only_filter_is_exact (test_repair.FailingGateTests.test_pass_status_only_filter_is_exact) ... ok\ntest_attempt_budget_is_bounded (test_repair.RepairPacketTests.test_attempt_budget_is_bounded) ... ok\ntest_empty_evidence_still_produces_a_usable_packet (test_repair.RepairPacketTests.test_empty_evidence_still_produces_a_usable_packet) ... ok\ntest_inputs_are_not_mutated (test_repair.RepairPacketTests.test_inputs_are_not_mutated) ... ok\ntest_instructions_name_every_failing_gate (test_repair.RepairPacketTests.test_instructions_name_every_failing_gate) ... ok\ntest_markdown_renders_the_escalation (test_repair.RepairPacketTests.test_markdown_renders_the_escalation) ... ok\ntest_scope_and_carry_forward_are_copies (test_repair.RepairPacketTests.test_scope_and_carry_forward_are_copies) ... ok\ntest_shape_ordering_and_scope (test_repair.RepairPacketTests.test_shape_ordering_and_scope) ... ok\ntest_deploy_fails_loudly_when_the_probe_fails (test_wiring.CliTests.test_deploy_fails_loudly_when_the_probe_fails) ... ok\ntest_deploy_fails_when_no_ready_line_arrives (test_wiring.CliTests.test_deploy_fails_when_no_ready_line_arrives) ... ok\ntest_deploy_starts_waits_probes_and_tears_down (test_wiring.CliTests.test_deploy_starts_waits_probes_and_tears_down) ... ok\ntest_fleetmetrics_prints_the_summary (test_wiring.CliTests.test_fleetmetrics_prints_the_summary) ... ok\ntest_help_lists_the_new_capabilities (test_wiring.CliTests.test_help_lists_the_new_capabilities) ... ok\ntest_repair_escalates_once_the_budget_is_spent (test_wiring.CliTests.test_repair_escalates_once_the_budget_is_spent) ... ok\ntest_repair_is_clean_when_nothing_failed (test_wiring.CliTests.test_repair_is_clean_when_nothing_failed) ... ok\ntest_repair_writes_one_packet_per_failed_task (test_wiring.CliTests.test_repair_writes_one_packet_per_failed_task) ... ok\n\n----------------------------------------------------------------------\nRan 48 tests in 6.581s\n\nOK\n",
+      "recorded_at": 1789040897.399168,
+      "status": "pass",
+      "task_id": "T-wiring"
+    },
+    {
+      "artifacts": [
+        "runs/20260910T114536Z-minifleet-v02-40d5be/evidence/G-contract.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 2.4513766765594482,
+      "exit_code": 0,
+      "gate_id": "G-contract",
+      "metrics": {},
+      "output_tail": "\ntest_summary_counts_and_critical_path (harness.test_contract.FleetMetricsTest.test_summary_counts_and_critical_path) ... ok\ntest_summary_of_an_empty_run_does_not_crash (harness.test_contract.FleetMetricsTest.test_summary_of_an_empty_run_does_not_crash) ... ok\ntest_smoke_reports_status_and_ok (harness.test_contract.ProbeTest.test_smoke_reports_status_and_ok) ... ok\ntest_soak_counts_samples_and_failures (harness.test_contract.ProbeTest.test_soak_counts_samples_and_failures) ... ok\ntest_soak_flags_a_dead_endpoint (harness.test_contract.ProbeTest.test_soak_flags_a_dead_endpoint) ... ok\ntest_escalation_when_attempts_are_exhausted (harness.test_contract.RepairPacketTest.test_escalation_when_attempts_are_exhausted) ... ok\ntest_inputs_are_not_mutated (harness.test_contract.RepairPacketTest.test_inputs_are_not_mutated) ... ok\ntest_no_failing_evidence_still_produces_a_usable_packet (harness.test_contract.RepairPacketTest.test_no_failing_evidence_still_produces_a_usable_packet) ... ok\ntest_packet_shape_and_ordering (harness.test_contract.RepairPacketTest.test_packet_shape_and_ordering) ... ok\ntest_missing_ready_line_times_out_without_hanging (harness.test_contract.SupervisorTest.test_missing_ready_line_times_out_without_hanging) ... ok\ntest_ready_line_is_parsed_and_process_stops (harness.test_contract.SupervisorTest.test_ready_line_is_parsed_and_process_stops) ... ok\n\n----------------------------------------------------------------------\nRan 11 tests in 2.345s\n\nOK\n",
+      "recorded_at": 1789040902.1315088,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "runs/20260910T114536Z-minifleet-v02-40d5be/evidence/G-wiring.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 0.49623584747314453,
+      "exit_code": 0,
+      "gate_id": "G-wiring",
+      "metrics": {},
+      "output_tail": "\ntest_fleetmetrics_reads_a_run_record (harness.test_wiring.CliWiringTest.test_fleetmetrics_reads_a_run_record) ... ok\ntest_help_lists_the_new_capabilities (harness.test_wiring.CliWiringTest.test_help_lists_the_new_capabilities) ... ok\ntest_repair_reports_cleanly_when_nothing_failed (harness.test_wiring.CliWiringTest.test_repair_reports_cleanly_when_nothing_failed) ... ok\ntest_repair_writes_a_repair_packet_for_every_failed_task (harness.test_wiring.CliWiringTest.test_repair_writes_a_repair_packet_for_every_failed_task) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.444s\n\nOK\n",
+      "recorded_at": 1789040902.6281035,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "runs/20260910T114536Z-minifleet-v02-40d5be/evidence/G-regression.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 6.61846399307251,
+      "exit_code": 0,
+      "gate_id": "G-regression",
+      "metrics": {},
+      "output_tail": "\n................................................\n----------------------------------------------------------------------\nRan 48 tests in 6.493s\n\nOK\n",
+      "recorded_at": 1789040909.246911,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [
+        "runs/20260910T114536Z-minifleet-v02-40d5be/evidence/G-bench.json"
+      ],
+      "detail": "exit=0 (expected [0])",
+      "duration_s": 6.639761209487915,
+      "exit_code": 0,
+      "gate_id": "G-bench",
+      "metrics": {
+        "engine_tests_ms": 6606.4
+      },
+      "output_tail": "MINIFLEET_METRIC {\"name\": \"engine_tests_ms\", \"value\": 6606.4}\nregression suite: OK in 6606 ms\n",
+      "recorded_at": 1789040915.886994,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "all paths satisfied: ['minifleet/repair.py', 'minifleet/deploy.py', 'minifleet/fleetmetrics.py', 'ACCEPTANCE.md']",
+      "duration_s": 0.0005602836608886719,
+      "exit_code": null,
+      "gate_id": "G-layout",
+      "metrics": {},
+      "output_tail": "",
+      "recorded_at": 1789040915.8877196,
+      "status": "pass",
+      "task_id": ""
+    },
+    {
+      "artifacts": [],
+      "detail": "engine_tests_ms=6606.4 <= 60000 -> ok",
+      "duration_s": 1.3589859008789062e-05,
+      "exit_code": null,
+      "gate_id": "G-budget-bench",
+      "metrics": {
+        "engine_tests_ms": 6606.4
+      },
+      "output_tail": "",
+      "recorded_at": 1789040915.8877382,
+      "status": "pass",
+      "task_id": ""
+    }
+  ],
+  "id": "20260910T114536Z-minifleet-v02-40d5be",
+  "integration_branch": "integration",
+  "intent": {
+    "acceptance": [
+      {
+        "gates": [
+          "G-contract"
+        ],
+        "id": "A-1",
+        "kind": "functional",
+        "statement": "A repair packet lists only the failing gates, in gate-id order, carries the task write scope and never mutates its inputs"
+      },
+      {
+        "gates": [
+          "G-contract"
+        ],
+        "id": "A-2",
+        "kind": "safety",
+        "statement": "Repair is bounded: once the attempt budget is exhausted the packet sets escalate instead of proposing another attempt"
+      },
+      {
+        "gates": [
+          "G-contract"
+        ],
+        "id": "A-3",
+        "kind": "operability",
+        "statement": "A supervisor starts a process, parses its ready line and port, times out without hanging when no ready line arrives, and always tears the process down"
+      },
+      {
+        "gates": [
+          "G-contract"
+        ],
+        "id": "A-4",
+        "kind": "operability",
+        "statement": "Smoke and soak probes report status, sample count, failure count and latency percentiles"
+      },
+      {
+        "gates": [
+          "G-contract"
+        ],
+        "id": "A-5",
+        "kind": "functional",
+        "statement": "Fleet metrics report tasks, merged, failed, attempts, retries, gate outcomes and the critical path through the task graph"
+      },
+      {
+        "gates": [
+          "G-wiring"
+        ],
+        "id": "A-6",
+        "kind": "functional",
+        "statement": "repair, deploy and fleetmetrics are CLI subcommands; repair writes one repair packet per failed task and reports cleanly when nothing failed"
+      },
+      {
+        "gates": [
+          "G-regression"
+        ],
+        "id": "A-7",
+        "kind": "safety",
+        "statement": "The pre-existing engine behaviour is unchanged: the regression suite that shipped with the baseline still passes on the integrated tree"
+      },
+      {
+        "gates": [
+          "G-budget-bench"
+        ],
+        "id": "A-8",
+        "kind": "nfr",
+        "statement": "The regression suite still finishes within 60 seconds"
+      }
+    ],
+    "baseline_from": "..",
+    "budgets": {
+      "engine_tests_ms": 60000.0
+    },
+    "components": [
+      {
+        "acceptance_ids": [
+          "A-1",
+          "A-2"
+        ],
+        "contract_ids": [
+          "C-V02"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "build_repair_packet matches the frozen signature and returns every documented key",
+          "failing gates are ordered by gate_id and exclude every passing gate",
+          "instructions name each failing gate id",
+          "the attempt budget is respected: escalate is set once it is exhausted",
+          "inputs are not mutated"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "repair",
+        "name": "Bounded self-repair",
+        "owns": [
+          "minifleet/repair.py",
+          "tests/test_repair.py"
+        ],
+        "responsibility": "Implement minifleet/repair.py, turning gate evidence into an actionable, bounded repair packet.",
+        "tests": [
+          "unit tests covering ordering, escalation, empty evidence and non-mutation"
+        ]
+      },
+      {
+        "acceptance_ids": [
+          "A-3",
+          "A-4"
+        ],
+        "contract_ids": [
+          "C-V02"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "Supervisor.start/wait_ready/stop behave as specified and never leak a child process",
+          "a missing ready line returns ready False within the timeout instead of hanging",
+          "smoke reports status, ok and elapsed time",
+          "soak reports samples, failures, ok, p50_ms and max_ms, and survives a dead endpoint"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "deploy",
+        "name": "Deploy and observe",
+        "owns": [
+          "minifleet/deploy.py",
+          "tests/test_deploy.py"
+        ],
+        "responsibility": "Implement minifleet/deploy.py: supervised process launch with ready detection, plus smoke and soak probes.",
+        "tests": [
+          "tests that spawn a real child process and a real in-process HTTP server"
+        ]
+      },
+      {
+        "acceptance_ids": [
+          "A-5"
+        ],
+        "contract_ids": [
+          "C-V02"
+        ],
+        "depends_on": [],
+        "done_when": [
+          "summarize returns every documented key for a realistic run record",
+          "the critical path follows depends_on edges and is not the sum of all durations",
+          "an empty run summarises without raising"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "fleetmetrics",
+        "name": "Fleet metrics",
+        "owns": [
+          "minifleet/fleetmetrics.py",
+          "tests/test_fleetmetrics.py"
+        ],
+        "responsibility": "Implement minifleet/fleetmetrics.py: account for a run - attempts, retries, gate outcomes and the critical path.",
+        "tests": [
+          "unit tests over synthetic run records, including a branching graph"
+        ]
+      },
+      {
+        "acceptance_ids": [
+          "A-6",
+          "A-7"
+        ],
+        "contract_ids": [
+          "C-V02"
+        ],
+        "depends_on": [
+          "repair",
+          "deploy",
+          "fleetmetrics"
+        ],
+        "done_when": [
+          "python3 -m minifleet --help lists repair, deploy and fleetmetrics",
+          "repair writes packets/<task>.repair.json for each failed task and prints 'no failed tasks' otherwise",
+          "deploy starts a command, waits for its ready line, probes it, prints JSON and always tears it down",
+          "fleetmetrics prints the summarize() JSON",
+          "every pre-existing subcommand and its behaviour is preserved"
+        ],
+        "gate_ids": [
+          "G-unit"
+        ],
+        "id": "wiring",
+        "name": "CLI and scheduler wiring",
+        "owns": [
+          "minifleet/cli.py",
+          "minifleet/scheduler.py",
+          "tests/test_wiring.py"
+        ],
+        "responsibility": "Wire the three new modules into the CLI (repair, deploy, fleetmetrics subcommands) and into the scheduler, without changing existing behaviour.",
+        "tests": [
+          "a CLI-level test that drives the fixture run directory through the new subcommands"
+        ]
+      }
+    ],
+    "constraints": [
+      "Python 3.12 standard library only",
+      "the frozen contract in contracts/C-V02.md is not renegotiable",
+      "harness/ is frozen: workers may read it, never modify it",
+      "no new third-party dependency may be introduced"
+    ],
+    "contracts": [
+      {
+        "content": "## Behavioural notes\n\n### repair\n`failing_gates` contains every evidence entry whose status is not `pass`, sorted by `gate_id`. `instructions` is a non-empty list of short, imperative sentences that name the failing gate ids so a worker can act without reading the ledger. `scope` is a copy of `task['owns']`. `carry_forward` is a copy of `task.get('submitted_files', [])`. `escalate` is True when `attempt >= max_attempts`. `reason` is a one-line summary of the failure. The function must not mutate `task` or `evidence`.\n\n### deploy\n`Supervisor.wait_ready()` reads the child's stdout line by line until a line starts with `ready_prefix`, parses the JSON payload after it (so `{\"port\": 4242}` yields `port=4242`), and returns within `timeout` seconds. On timeout it returns `ready: False` and a `stdout_tail` of what was seen; it must not hang and must leave `running` False after `stop()`. `stop()` sends SIGTERM, waits up to its timeout, escalates to SIGKILL if needed, and returns the exit code.\n`smoke(url)` performs one GET and returns the status code, whether it was 2xx (`ok`), and the elapsed seconds. `soak(url, seconds, interval)` repeats GETs until `seconds` have elapsed, counts samples and failures (non-2xx counts as a failure), and reports `p50_ms`/`max_ms`. A dead endpoint must produce failures rather than an exception.\n\n### fleetmetrics\n`summarize(run)` takes a decoded `run.json`. `critical_path_seconds` is the longest chain of task durations following `depends_on` edges - it is not the sum of all durations. Task duration is `finished_at - started_at`, treated as 0 when either bound is missing. `slowest_task` is the task with the largest duration, or None when there are no tasks. `retries` is the sum of `max(attempts - 1, 0)`. `merged` counts tasks in state `merged`.\n\n### CLI\n`repair` must work on a run directory that contains only `run.json` plus a `packets/` directory, creating `packets/` if needed. It must not require a git repository.",
+        "exports": {
+          "minifleet cli": "python3 -m minifleet repair --run DIR writes packets/<task>.repair.json for every failed task and prints 'no failed tasks' when there are none; python3 -m minifleet deploy --dir DIR --cmd CMD --probe PATH [--seconds N] starts the process, waits for its ready line, smokes and soaks the probe path, prints a JSON report and exits non-zero when the probe fails; python3 -m minifleet fleetmetrics --run DIR prints the summarize() JSON on stdout",
+          "minifleet.deploy.Supervisor": "Supervisor(argv: list[str], cwd: str, ready_prefix: str = 'MINIFLEET_READY', timeout: float = 30.0) with .start() -> Supervisor, .wait_ready() -> {'ready': bool, 'port': int|None, 'seconds': float, 'stdout_tail': str}, .stop(timeout: float = 10.0) -> int, .running -> bool",
+          "minifleet.deploy.smoke": "smoke(url: str, timeout: float = 5.0) -> {'status': int, 'ok': bool, 'seconds': float}",
+          "minifleet.deploy.soak": "soak(url: str, seconds: float, interval: float = 0.25, timeout: float = 5.0) -> {'samples': int, 'failures': int, 'ok': bool, 'p50_ms': float, 'max_ms': float}",
+          "minifleet.fleetmetrics.summarize": "summarize(run: dict) -> {'tasks': int, 'merged': int, 'failed': int, 'attempts_total': int, 'retries': int, 'gates_total': int, 'gates_passed': int, 'gates_failed': int, 'critical_path_seconds': float, 'slowest_task': {'id': str, 'seconds': float} | None, 'verdict': str}",
+          "minifleet.repair.build_repair_packet": "build_repair_packet(task: dict, evidence: list[dict], attempt: int, max_attempts: int = 3) -> dict with keys task_id, attempt, max_attempts, escalate, reason, failing_gates[{gate_id,status,detail}], instructions[list[str]], scope[list[str]], carry_forward[list[str]]"
+        },
+        "frozen": true,
+        "id": "C-V02",
+        "path": "contracts/C-V02.md",
+        "summary": "Frozen interfaces for the three v0.2 modules and the CLI surface that exposes them."
+      }
+    ],
+    "deliverables": [
+      "minifleet/repair.py - turn gate evidence into a bounded, actionable repair packet",
+      "minifleet/deploy.py - supervised process launch, ready detection, smoke and soak probes",
+      "minifleet/fleetmetrics.py - attempts, retries, gate outcomes and critical path of a run",
+      "cli wiring so `repair`, `deploy` and `fleetmetrics` are real subcommands",
+      "the existing engine tests, still green"
+    ],
+    "gate_defs": [
+      {
+        "cmd": "python3 -m unittest discover -s tests -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-unit",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "task",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "worker's own tests plus the baseline suite"
+      },
+      {
+        "cmd": "python3 -m unittest harness.test_contract -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-contract",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "v0.2 contract conformance"
+      },
+      {
+        "cmd": "python3 -m unittest harness.test_wiring -v",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-wiring",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "CLI wiring"
+      },
+      {
+        "cmd": "python3 -m unittest discover -s tests",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-regression",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "engine regression on the integrated tree"
+      },
+      {
+        "cmd": "python3 -m harness.bench",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-bench",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "cmd",
+        "metric": "",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 900,
+        "title": "measure the regression suite"
+      },
+      {
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-budget-bench",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "budget",
+        "metric": "engine_tests_ms",
+        "op": "<=",
+        "paths": [],
+        "required": true,
+        "scope": "system",
+        "threshold": 60000.0,
+        "timeout": 300.0,
+        "title": "regression suite stays cheap"
+      },
+      {
+        "cmd": "",
+        "cwd": ".",
+        "description": "",
+        "expect_exit": [
+          0
+        ],
+        "id": "G-layout",
+        "json_expected": null,
+        "json_path": "",
+        "kind": "files",
+        "metric": "",
+        "op": "<=",
+        "paths": [
+          "minifleet/repair.py",
+          "minifleet/deploy.py",
+          "minifleet/fleetmetrics.py",
+          "ACCEPTANCE.md"
+        ],
+        "required": true,
+        "scope": "system",
+        "threshold": 0.0,
+        "timeout": 300.0,
+        "title": "new modules present"
+      }
+    ],
+    "harness_dir": "harness-selfhost",
+    "id": "minifleet-v02",
+    "out_of_scope": [
+      "publishing to a cloud provider; deploy means supervised local execution in the workspace",
+      "multi-host orchestration",
+      "an LLM-backed planner"
+    ],
+    "stakeholders": [
+      "the fleet operator",
+      "whoever inherits this repository"
+    ],
+    "summary": "The fleet upgrades itself: it adopts its own codebase, adds the three capabilities it was missing (bounded self-repair from gate evidence, a supervised deploy-and-observe stage, and fleet-level metrics), and proves it did not break the existing engine.",
+    "title": "MiniFleet v0.2: autonomy on failure, deployment, fleet metrics"
+  },
+  "intent_id": "minifleet-v02",
+  "raw_intent": "Continue replicating Fleet by making MiniFleet more autonomous. It must be able to (1) turn a failed task into a repair packet that a worker can act on, bounded by a maximum number of attempts, (2) actually deploy a produced system: start it, wait for its ready line, probe it, soak it for a short window and shut it down, and (3) account for its own runs - attempts, retries, gate outcomes and the critical path through the task graph. All three must be reachable from the CLI. The existing engine behaviour must be preserved: the current regression suite is the floor, not a suggestion.",
+  "repo_dir": "runs/20260910T114536Z-minifleet-v02-40d5be/product",
+  "status": "passed",
+  "updated_at": 1789040915.9117498,
+  "verdict": "pass: all required gates green"
+}

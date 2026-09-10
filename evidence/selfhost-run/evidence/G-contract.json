@@ -1,0 +1,17 @@
+{
+  "cmd": "python3 -m unittest harness.test_contract -v",
+  "evidence": {
+    "artifacts": [],
+    "detail": "exit=0 (expected [0])",
+    "duration_s": 2.4513766765594482,
+    "exit_code": 0,
+    "gate_id": "G-contract",
+    "metrics": {},
+    "output_tail": "\ntest_summary_counts_and_critical_path (harness.test_contract.FleetMetricsTest.test_summary_counts_and_critical_path) ... ok\ntest_summary_of_an_empty_run_does_not_crash (harness.test_contract.FleetMetricsTest.test_summary_of_an_empty_run_does_not_crash) ... ok\ntest_smoke_reports_status_and_ok (harness.test_contract.ProbeTest.test_smoke_reports_status_and_ok) ... ok\ntest_soak_counts_samples_and_failures (harness.test_contract.ProbeTest.test_soak_counts_samples_and_failures) ... ok\ntest_soak_flags_a_dead_endpoint (harness.test_contract.ProbeTest.test_soak_flags_a_dead_endpoint) ... ok\ntest_escalation_when_attempts_are_exhausted (harness.test_contract.RepairPacketTest.test_escalation_when_attempts_are_exhausted) ... ok\ntest_inputs_are_not_mutated (harness.test_contract.RepairPacketTest.test_inputs_are_not_mutated) ... ok\ntest_no_failing_evidence_still_produces_a_usable_packet (harness.test_contract.RepairPacketTest.test_no_failing_evidence_still_produces_a_usable_packet) ... ok\ntest_packet_shape_and_ordering (harness.test_contract.RepairPacketTest.test_packet_shape_and_ordering) ... ok\ntest_missing_ready_line_times_out_without_hanging (harness.test_contract.SupervisorTest.test_missing_ready_line_times_out_without_hanging) ... ok\ntest_ready_line_is_parsed_and_process_stops (harness.test_contract.SupervisorTest.test_ready_line_is_parsed_and_process_stops) ... ok\n\n----------------------------------------------------------------------\nRan 11 tests in 2.345s\n\nOK\n",
+    "recorded_at": 1789040902.1315088,
+    "status": "pass",
+    "task_id": ""
+  },
+  "gate": "G-contract",
+  "title": "v0.2 contract conformance"
+}

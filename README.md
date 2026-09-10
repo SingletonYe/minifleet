@@ -43,6 +43,9 @@ python3 -m minifleet ingest  --run runs/<id> --task T-storage
 python3 -m minifleet integrate --run runs/<id>
 python3 -m minifleet verify  --run runs/<id>
 python3 -m minifleet report  --run runs/<id>
+python3 -m minifleet fleetmetrics --run runs/<id>        # what the run cost, gate by gate
+python3 -m minifleet repair  --run runs/<id>             # bounded next attempt for failed tasks
+python3 -m minifleet deploy --dir <product> --cmd "python3 -m linksvc" --probe /healthz --seconds 5
 ```
 
 `status` shows the state of every task and the exact next action for each one. The same
@@ -143,6 +146,51 @@ the contracts and harness files frozen since. `worktree.attempt_branch` now dete
 branch that is already contained in the baseline and starts a fresh attempt branch from
 the current baseline instead; `tests/test_engine.py` pins the behaviour.
 
+## v0.2: the fleet upgrades itself (brownfield self-hosting)
+
+The third run does not build a new service. It hands the fleet **its own repository** and
+asks it for the three capabilities that were still missing, which is the closest thing
+here to the product claim: a system that can be pointed at an existing codebase and left
+to change it under its own rules.
+
+Two things had to become real for that to work.
+
+**Brownfield baselines.** An intent can name `baseline_from`, and the run adopts that tree
+as its product instead of writing a fresh one. Fleet-owned paths (`ACCEPTANCE.md`,
+`INTENT.md`, `contracts/`, `harness/`) still overwrite, everything else is left exactly as
+it was - the fleet may add to a codebase, but it may not silently clobber it. The new
+acceptance harness is frozen into the adopted tree *before* any worker is dispatched, and
+the regression suite that shipped with the repository is part of the definition of done.
+
+**Autonomy on failure, deployment, and self-accounting.** Three modules, all reachable
+from the CLI, all judged by gates the workers did not write:
+
+| capability | module | what a gate actually checked |
+| --- | --- | --- |
+| bounded self-repair | `minifleet/repair.py` | failing gates only, ordered by gate id, instructions that name them, `escalate` set once the attempt budget is spent, inputs unmutated |
+| deploy and observe | `minifleet/deploy.py` | a real child process started, its ready line parsed for the port, a timeout that does not hang, `SIGTERM` then `SIGKILL`, smoke and soak probes that report samples, failures and percentiles |
+| fleet accounting | `minifleet/fleetmetrics.py` | tasks, merged, failed, attempts, retries, gate outcomes, and the critical path - the longest chain through `depends_on`, not the sum of all durations |
+
+A failed task now leaves a repair packet behind (`packets/<task>.repair.json`, recorded in
+the ledger by `task.repair_packet`); `minifleet repair` regenerates those packets from any
+run record, including one that is nothing but `run.json` and no git repository at all.
+
+The run is recorded in [`evidence/selfhost-run/`](evidence/selfhost-run/) and its rendered
+report is at <https://singletonye.github.io/minifleet/selfhost.html>.
+
+| what the fleet did | where it is recorded |
+| --- | --- |
+| adopted its own tree as the product, then dispatched three tasks in parallel | `evidence/selfhost-run/ledger.jsonl` |
+| each task packet, with its disjoint write scope and the frozen `C-V02` contract | `evidence/selfhost-run/packets/` |
+| the fourth task (wiring) dispatched only after the first three merged | `evidence/selfhost-run/dispatch.json` |
+| ten gate observations on the integrated tree, budgets last | `evidence/selfhost-run/evidence/` |
+| all eight criteria traced to a passing gate | `evidence/selfhost-run/report.md` |
+
+`fleetmetrics` on that run: 4 tasks, 4 merged, 0 failed, 10 gate observations, 0 retries,
+critical path 153.7 s, and the regression suite at 6.6 s against a 60 s budget - the
+measurement is printed by `harness/bench.py` as `MINIFLEET_METRIC`, so the budget gate
+reads the same number the report shows.
+
 ## Repository layout
 
 ```
@@ -153,6 +201,9 @@ minifleet/           the engine
   worktree.py        git isolation and ownership conflict detection
   gates.py           gate kinds, metric store, verdicts
   workers.py         packet rendering and dispatcher back ends
+  repair.py          gate evidence -> bounded, actionable repair packet
+  deploy.py          supervised local execution, smoke and soak probes
+  fleetmetrics.py    attempts, retries, gate outcomes, critical path
   ledger.py          run record and intent → evidence traceability
   report.py          Markdown and HTML reports
   cli.py             operator interface
@@ -169,6 +220,12 @@ runs/<id>/           run record, packets, evidence, product repo, worktrees
   front; a real conflict aborts integration and is reported.
 * `evolve` re-plans against a new intent and reopens affected tasks, keeping verified work
   as the regression suite. It does not yet do continuous deployment.
+* `deploy` is supervised **local** execution: it starts the artefact, waits for its ready
+  line, probes it and tears it down. There is no cloud provider, no multi-host placement
+  and no restart-on-crash supervision loop yet.
+* Repair is bounded but not yet closed-loop: a failed task gets an actionable packet and,
+  once the budget is spent, an escalation - but re-dispatching that packet is still an
+  explicit operator decision rather than an automatic retry.
 
 ## Tests
 

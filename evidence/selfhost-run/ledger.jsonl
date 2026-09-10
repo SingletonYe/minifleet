@@ -1,0 +1,19 @@
+{"dispatcher": "packet", "event": "run.created", "intent": "minifleet-v02", "t": 1789040736.9182336}
+{"event": "tasks.ready", "t": 1789040737.039004, "tasks": ["T-repair", "T-deploy", "T-fleetmetrics"]}
+{"event": "plan.complete", "gates": 7, "t": 1789040737.1196175, "tasks": 4}
+{"dispatcher": "packet", "event": "tasks.dispatched", "t": 1789040741.31344, "tasks": ["T-repair", "T-deploy", "T-fleetmetrics"]}
+{"commit": "1fcff739d22cde3433ae91b299a9da900b96ca04", "event": "task.submitted", "files": ["minifleet/repair.py", "tests/test_repair.py"], "notes": "implemented per packet", "t": 1789040841.3162801, "task": "T-repair", "worker": "okou-cli"}
+{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789040841.8584828, "task": "T-repair"}
+{"commit": "6435fc0c3816c25942c8fa9e6a82edfb5eb4274e", "event": "task.submitted", "files": ["minifleet/deploy.py", "tests/test_deploy.py"], "notes": "implemented per packet", "t": 1789040841.979017, "task": "T-deploy", "worker": "okou-cli"}
+{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789040845.7216904, "task": "T-deploy"}
+{"commit": "0569784f04ac47e8bb4df1aea3080eaa63189f24", "event": "task.submitted", "files": ["minifleet/fleetmetrics.py", "tests/test_fleetmetrics.py"], "notes": "implemented per packet", "t": 1789040845.8425338, "task": "T-fleetmetrics", "worker": "okou-cli"}
+{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789040846.3901424, "task": "T-fleetmetrics"}
+{"branch": "task/deploy-a2", "event": "task.merged", "t": 1789040848.6315348, "task": "T-deploy"}
+{"branch": "task/fleetmetrics-a2", "event": "task.merged", "t": 1789040848.641946, "task": "T-fleetmetrics"}
+{"branch": "task/repair-a2", "event": "task.merged", "t": 1789040848.6526632, "task": "T-repair"}
+{"event": "tasks.ready", "t": 1789040848.652805, "tasks": ["T-wiring"]}
+{"dispatcher": "packet", "event": "tasks.dispatched", "t": 1789040848.8014388, "tasks": ["T-wiring"]}
+{"commit": "5ffe824f31759e9b03d2aa0b3b727d45966a7d84", "event": "task.submitted", "files": ["minifleet/cli.py", "minifleet/scheduler.py", "tests/test_wiring.py"], "notes": "cli + scheduler wiring", "t": 1789040890.715404, "task": "T-wiring", "worker": "okou-cli"}
+{"event": "task.verified", "gates": {"G-unit": "pass"}, "t": 1789040897.4027143, "task": "T-wiring"}
+{"branch": "task/wiring", "event": "task.merged", "t": 1789040897.5212631, "task": "T-wiring"}
+{"event": "system.verified", "gates": {"G-bench": "pass", "G-budget-bench": "pass", "G-contract": "pass", "G-layout": "pass", "G-regression": "pass", "G-wiring": "pass"}, "t": 1789040915.8906891, "verdict": "pass: all required gates green"}

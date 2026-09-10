@@ -1,0 +1,17 @@
+{
+  "cmd": "python3 -m unittest harness.test_wiring -v",
+  "evidence": {
+    "artifacts": [],
+    "detail": "exit=0 (expected [0])",
+    "duration_s": 0.49623584747314453,
+    "exit_code": 0,
+    "gate_id": "G-wiring",
+    "metrics": {},
+    "output_tail": "\ntest_fleetmetrics_reads_a_run_record (harness.test_wiring.CliWiringTest.test_fleetmetrics_reads_a_run_record) ... ok\ntest_help_lists_the_new_capabilities (harness.test_wiring.CliWiringTest.test_help_lists_the_new_capabilities) ... ok\ntest_repair_reports_cleanly_when_nothing_failed (harness.test_wiring.CliWiringTest.test_repair_reports_cleanly_when_nothing_failed) ... ok\ntest_repair_writes_a_repair_packet_for_every_failed_task (harness.test_wiring.CliWiringTest.test_repair_writes_a_repair_packet_for_every_failed_task) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.444s\n\nOK\n",
+    "recorded_at": 1789040902.6281035,
+    "status": "pass",
+    "task_id": ""
+  },
+  "gate": "G-wiring",
+  "title": "CLI wiring"
+}

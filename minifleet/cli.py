@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import shutil
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 from . import architect, intent as intent_mod, ledger, report as report_mod
+from .deploy import Supervisor, smoke, soak
+from .fleetmetrics import summarize
 from .model import Design, IntentSpec, Run, RunStatus, TaskState
+from .repair import build_repair_packet
 from .scheduler import Scheduler
 from .workers import PacketDispatcher, make_dispatcher
 
@@ -63,6 +68,21 @@ def main(argv: list[str] | None = None) -> int:
     p_evolve.add_argument("--run", required=True)
     p_evolve.add_argument("--intent", required=True)
 
+    p_repair = sub.add_parser("repair", help="turn failed tasks into bounded repair packets")
+    p_repair.add_argument("--run", required=True)
+    p_repair.add_argument("--max-attempts", type=int, default=3)
+
+    p_deploy = sub.add_parser("deploy", help="supervise a produced system and probe it")
+    p_deploy.add_argument("--dir", required=True, help="working directory to start the process in")
+    p_deploy.add_argument("--cmd", required=True, help="the command that starts the system")
+    p_deploy.add_argument("--probe", required=True, help="probe path, e.g. /healthz")
+    p_deploy.add_argument("--seconds", type=float, default=0.0, help="soak window in seconds")
+    p_deploy.add_argument("--ready-prefix", default="MINIFLEET_READY")
+    p_deploy.add_argument("--timeout", type=float, default=30.0, help="seconds to wait for ready")
+
+    p_metrics = sub.add_parser("fleetmetrics", help="account for a run: attempts, retries, gates, path")
+    p_metrics.add_argument("--run", required=True)
+
     args = parser.parse_args(argv)
     handler = {
         "plan": cmd_plan,
@@ -75,6 +95,9 @@ def main(argv: list[str] | None = None) -> int:
         "packet": cmd_packet,
         "run": cmd_run,
         "evolve": cmd_evolve,
+        "repair": cmd_repair,
+        "deploy": cmd_deploy,
+        "fleetmetrics": cmd_fleetmetrics,
     }[args.command]
     return handler(args)
 
@@ -294,6 +317,89 @@ def cmd_evolve(args: argparse.Namespace) -> int:
 
 
 # -- helpers -------------------------------------------------------------
+def cmd_repair(args: argparse.Namespace) -> int:
+    """Turn every failed task in a run into a bounded, actionable repair packet."""
+
+    run_dir = Path(args.run)
+    record = json.loads((run_dir / "run.json").read_text())
+    tasks = ((record.get("design") or {}).get("tasks")) or []
+    failed = [task for task in tasks if task.get("state") == "failed"]
+    if not failed:
+        print("no failed tasks")
+        return 0
+    packets_dir = run_dir / "packets"
+    packets_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for task in failed:
+        packet = build_repair_packet(
+            task,
+            _task_evidence(record, task),
+            attempt=int(task.get("attempts") or 0),
+            max_attempts=args.max_attempts,
+        )
+        path = packets_dir / f"{task.get('id')}.repair.json"
+        path.write_text(json.dumps(packet, indent=2, sort_keys=True))
+        written.append(path)
+    print(f"{len(written)} repair packet(s) written")
+    for path in written:
+        print(f"  {path}")
+    return 0
+
+
+def cmd_deploy(args: argparse.Namespace) -> int:
+    """Start a produced system, wait for its ready line, probe it, then tear it down."""
+
+    supervisor = Supervisor(
+        shlex.split(args.cmd),
+        cwd=args.dir,
+        ready_prefix=args.ready_prefix,
+        timeout=args.timeout,
+    )
+    report: dict[str, Any] = {"dir": args.dir, "cmd": args.cmd, "probe": args.probe, "ok": False}
+    try:
+        supervisor.start()
+        ready = supervisor.wait_ready()
+        report["ready"] = ready
+        port = ready.get("port")
+        if ready.get("ready") and port:
+            url = f"http://127.0.0.1:{port}{args.probe}"
+            report["url"] = url
+            report["smoke"] = smoke(url)
+            ok = bool(report["smoke"]["ok"])
+            if args.seconds > 0:
+                report["soak"] = soak(url, seconds=args.seconds)
+                ok = ok and bool(report["soak"]["ok"])
+            report["ok"] = ok
+        else:
+            report["reason"] = "the system never announced a ready line with a port"
+    finally:
+        report["exit_code"] = supervisor.stop()
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0 if report["ok"] else 1
+
+
+def cmd_fleetmetrics(args: argparse.Namespace) -> int:
+    """Print one run's fleet-level accounting as JSON."""
+
+    record = json.loads((Path(args.run) / "run.json").read_text())
+    print(json.dumps(summarize(record), indent=2, sort_keys=True))
+    return 0
+
+
+def _task_evidence(record: dict[str, Any], task: dict[str, Any]) -> list[dict[str, Any]]:
+    """The evidence a failed task is judged on: its own rows, else its gate rows."""
+
+    own = task.get("evidence")
+    if own:
+        return list(own)
+    gate_ids = set(task.get("gate_ids") or [])
+    return [
+        item
+        for item in record.get("evidence") or []
+        if item.get("gate_id") in gate_ids
+    ]
+
+
 def _load(run_dir: str) -> tuple[Run, Path]:
     path = Path(run_dir)
     return Run.load(path), path

@@ -1,0 +1,19 @@
+{
+  "cmd": "python3 -m harness.bench",
+  "evidence": {
+    "artifacts": [],
+    "detail": "exit=0 (expected [0])",
+    "duration_s": 6.639761209487915,
+    "exit_code": 0,
+    "gate_id": "G-bench",
+    "metrics": {
+      "engine_tests_ms": 6606.4
+    },
+    "output_tail": "MINIFLEET_METRIC {\"name\": \"engine_tests_ms\", \"value\": 6606.4}\nregression suite: OK in 6606 ms\n",
+    "recorded_at": 1789040915.886994,
+    "status": "pass",
+    "task_id": ""
+  },
+  "gate": "G-bench",
+  "title": "measure the regression suite"
+}

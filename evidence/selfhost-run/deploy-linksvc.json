@@ -1,0 +1,26 @@
+{
+  "cmd": "python3 -m linksvc",
+  "dir": "examples/linksvc",
+  "exit_code": 0,
+  "ok": true,
+  "probe": "/healthz",
+  "ready": {
+    "port": 8080,
+    "ready": true,
+    "seconds": 0.071,
+    "stdout_tail": "MINIFLEET_READY {\"port\": 8080}"
+  },
+  "smoke": {
+    "ok": true,
+    "seconds": 0.0236,
+    "status": 200
+  },
+  "soak": {
+    "failures": 0,
+    "max_ms": 1.938,
+    "ok": true,
+    "p50_ms": 1.681,
+    "samples": 13
+  },
+  "url": "http://127.0.0.1:8080/healthz"
+}

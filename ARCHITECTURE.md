@@ -1,6 +1,6 @@
 # Architecture
 
-## The five stages
+## The six stages
 
 1. **Compile.** `intent.py` turns a structured intent into an `IntentSpec`. An intent that
    names a gate that does not exist, that declares a budget without an enforcing gate, or
@@ -22,6 +22,29 @@
 5. **Verify.** System gates run on the integrated tree. Budget gates run last, after the
    probe gates that measure them. A verdict is `pass` only if every required gate produced
    passing evidence; a metric that was never measured is an error, never a pass.
+6. **Observe.** `deploy.py` starts the produced system under supervision, waits for its
+   machine-readable ready line, probes it, soaks it for a bounded window and tears it down.
+   Verification answers "did the gates pass"; observation answers "does it actually run".
+
+## Adopting an existing codebase
+
+An intent may name `baseline_from`, in which case the run adopts that tree as the product
+instead of materialising a fresh one. Adoption is deliberately asymmetric: the fleet owns
+`ACCEPTANCE.md`, `INTENT.md`, `contracts/` and `harness/` and always writes them, and it
+copies everything else only when the path does not already exist. A worker can therefore
+extend a real repository, but no stage of the pipeline can silently overwrite a file the
+repository already had - including the regression suite, which becomes part of the run's
+definition of done rather than a suggestion.
+
+## Failure is an input, not an ending
+
+`repair.py` turns a failed attempt's evidence into the next attempt's brief: the failing
+gates in gate-id order, instructions that name each of them with the gate's own detail, the
+task's write scope, what was already submitted, and an attempt budget. Nothing about a
+packet is generated from the worker's own claims - the evidence is what gates observed.
+When the budget is spent, the packet sets `escalate` and says so, because "retry forever"
+is not autonomy. `scheduler.ingest` writes the packet on failure and records
+`task.repair_packet` in the ledger; re-dispatching it remains an explicit operator action.
 
 ## Evidence model
 
@@ -30,6 +53,12 @@ metrics, output tail, and the artefacts it wrote. `ledger.traceability()` joins 
 acceptance criteria to the tasks that feed them and the gates that judged them, which is
 what the report renders. The consequence is a simple rule for the whole system: if a
 sentence cannot be traced to evidence, the report marks it as unproven.
+
+`fleetmetrics.py` reads the same records from the other end: how many attempts the run
+actually spent, how many of them were retries, how the gates split between pass and not,
+and the critical path through `depends_on` - the longest chain of task durations, which is
+the wall-clock floor the run could not go below. It is intentionally *not* the sum of all
+durations: work that overlapped in time must not be charged twice.
 
 ## Concurrency model
 
