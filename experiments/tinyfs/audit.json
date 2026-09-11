@@ -1,55 +1,55 @@
 {
-  "tree": "/home/user/workspace/minifleet/runs/tinyfs/20260911T122938Z-tinyfs-96c783/product",
+  "tree": "/home/user/workspace/minifleet/runs/tinyfs/20260911T125507Z-tinyfs-6cec72/product",
   "rows": [
     {
       "gate": "clean export is self-contained",
-      "ok": false,
-      "detail": "6/7 gates pass on a git-archive export"
+      "ok": true,
+      "detail": "7/7 gates pass on a git-archive export"
     },
     {
-      "gate": "harness: api",
+      "gate": "G-harness-api",
       "ok": true,
       "detail": "OK"
     },
     {
-      "gate": "harness: differential",
+      "gate": "G-harness-differential",
       "ok": true,
       "detail": "OK"
     },
     {
-      "gate": "harness: crash",
+      "gate": "G-harness-crash",
       "ok": true,
       "detail": "OK"
     },
     {
-      "gate": "harness: fsck",
+      "gate": "G-harness-fsck",
       "ok": true,
       "detail": "OK"
     },
     {
-      "gate": "regression suite",
+      "gate": "G-stdlib-only",
+      "ok": true,
+      "detail": "stdlib-only: clean (7 file(s) checked)"
+    },
+    {
+      "gate": "G-regression",
       "ok": true,
       "detail": "OK"
     },
     {
-      "gate": "stdlib-only policy",
-      "ok": false,
-      "detail": "/usr/bin/python3: Error while finding module specification for 'minifleet.checks' (ModuleNotFoundError: No module named 'minifleet')"
+      "gate": "G-probe-fs-write-mbps",
+      "ok": true,
+      "detail": "write 50.09 MB/s, read 755.33 MB/s, create 4630 ops/s"
     },
     {
-      "gate": "perf probe",
+      "gate": "the judge shipped byte-identical",
       "ok": true,
-      "detail": "write 39.63 MB/s, read 673.27 MB/s, create 4598 ops/s"
-    },
-    {
-      "gate": "frozen harness shipped byte-identical",
-      "ok": true,
-      "detail": "7 harness files match"
+      "detail": "7 harness files; shipped policy checker matches"
     },
     {
       "gate": "every written path was declared",
       "ok": true,
-      "detail": "33 path(s) changed, all inside the declared write scopes"
+      "detail": "12 path(s) changed, all inside the declared write scopes"
     },
     {
       "gate": "on-disk invariants after a workload",
@@ -62,9 +62,9 @@
       "detail": "fsck ok=True, image is exactly 1048576 bytes: True"
     },
     {
-      "gate": "crash sweep k=1..60 (+20 double faults)",
+      "gate": "crash sweep k=1..120 (+40 double faults)",
       "ok": true,
-      "detail": "41/60 crash(es) injected, 0 failure(s)",
+      "detail": "41/120 crash(es) injected, 0 failure(s)",
       "failures": []
     },
     {

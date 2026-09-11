@@ -210,19 +210,19 @@ def policy_gates(constraints: list[str], roots: list[str], network_allow: list[s
     gates: list[dict[str, Any]] = []
     joined = " ".join(constraints).lower()
     if roots and ("standard library" in joined or "third-party" in joined or "third party" in joined):
-        gates.append(
-            gatelib.stdlib_only(
-                roots, allow=stdlib_allow, project=roots, fleet_root=_fleet_root()
-            )
-        )
+        gates.append(gatelib.stdlib_only(roots, allow=stdlib_allow, project=roots))
         notes.append(f"'standard library only' became an enforced import gate over {', '.join(roots)}")
         if stdlib_allow:
             notes.append(
                 "declared exceptions to that gate: " + ", ".join(stdlib_allow)
                 + " (an exception belongs in the intent, never in the checker)"
             )
+        notes.append(
+            f"the checker is shipped into the product at {gatelib.POLICY_CHECKER}, so the gate runs "
+            "on a bare checkout with no fleet installation"
+        )
     if "no network" in joined or "offline" in joined:
-        gates.append(gatelib.no_network(roots, allow=network_allow, fleet_root=_fleet_root()))
+        gates.append(gatelib.no_network(roots, allow=network_allow))
         notes.append("'no network in library code' became an enforced import gate")
     return gates
 
@@ -537,18 +537,6 @@ def split_list(value: str | None) -> list[str]:
 def _slug(title: str) -> str:
     tail = title.split(":", 1)[1] if ":" in title else title
     return re.sub(r"[^a-z0-9]+", "-", tail.strip().lower()).strip("-") or "intent"
-
-
-def _fleet_root() -> str:
-    """Where this fleet's own package can be imported from.
-
-    A policy gate that runs `python3 -m minifleet.checks` only works when the
-    product tree happens to contain the fleet - which is true for a self-hosting
-    run and false for every other product. The compiler therefore records the
-    fleet's own location in the gate instead of assuming it.
-    """
-
-    return str(Path(__file__).resolve().parents[1])
 
 
 def validate_intent(data: dict[str, Any]) -> None:

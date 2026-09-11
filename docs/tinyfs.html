@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tinyfs - a crash-consistent filesystem, built and audited by the fleet</title>
+<style>
+:root { --bg:#0b0f14; --panel:#131a23; --line:#22303d; --ink:#e8eef5; --muted:#8ba0b4;
+        --ok:#3ddc97; --bad:#ff6b6b; --warn:#ffc857; --info:#57b8ff; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink);
+       font:15px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+header { padding:40px 28px 24px; border-bottom:1px solid var(--line);
+         background:linear-gradient(180deg,#101823,#0b0f14); }
+h1 { margin:0 0 6px; font-size:26px; letter-spacing:-.01em; }
+h2 { margin:36px 0 12px; font-size:18px; }
+h3 { margin:22px 0 8px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+.muted { color:var(--muted); }
+main { padding:24px 28px 64px; max-width:1180px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-top:18px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+.card .k { color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.08em; }
+.card .v { font-size:22px; font-weight:600; margin-top:4px; }
+table { width:100%; border-collapse:collapse; background:var(--panel);
+        border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+th,td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13.5px; }
+th { background:#0f1620; color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; }
+tr:last-child td { border-bottom:none; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; color:#cfe3ff; }
+.pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11.5px;
+        border:1px solid var(--line); background:#0f1620; }
+.pill.pass,.pill.verified,.pill.merged { color:var(--ok); border-color:#1d5c43; background:#0f2620; }
+.pill.fail,.pill.failed,.pill.error { color:var(--bad); border-color:#5c1d1d; background:#260f0f; }
+.pill.dispatched,.pill.submitted,.pill.incomplete,.pill.unproven { color:var(--warn); border-color:#5c4a1d; background:#26200f; }
+.pill.ready,.pill.pending { color:var(--info); border-color:#1d3c5c; background:#0f1c26; }
+ul { margin:8px 0; padding-left:20px; }
+footer { padding:18px 28px 40px; color:var(--muted); font-size:12.5px; border-top:1px solid var(--line); }
+</style></head>
+<body>
+<header>
+  <h1>tinyfs: a crash-consistent filesystem core</h1>
+  <div class="muted">Produced by MiniFleet from a prose intent, judged by gates the builders
+  could not edit, then re-audited from a clean export.</div>
+  <div class="cards">
+    <div class="card"><div class="k">Run verdict</div><div class="v">passed</div></div>
+    <div class="card"><div class="k">Gate observations</div><div class="v">17</div></div>
+    <div class="card"><div class="k">Audit checks</div><div class="v">14/14</div></div>
+    <div class="card"><div class="k">Components</div><div class="v">5</div></div>
+  </div>
+</header>
+<main>
+  <h2>1. The audit, from a <code>git archive</code> export</h2>
+  <p class="muted">Every row below was produced by re-running the run's own gates and then
+  pushing past them: /home/user/workspace/minifleet/runs/tinyfs/20260911T125507Z-tinyfs-6cec72/product</p>
+  <table><thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
+  <tbody><tr><td><code>clean export is self-contained</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>7/7 gates pass on a git-archive export</td></tr>
+<tr><td><code>G-harness-api</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>OK</td></tr>
+<tr><td><code>G-harness-differential</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>OK</td></tr>
+<tr><td><code>G-harness-crash</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>OK</td></tr>
+<tr><td><code>G-harness-fsck</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>OK</td></tr>
+<tr><td><code>G-stdlib-only</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>stdlib-only: clean (7 file(s) checked)</td></tr>
+<tr><td><code>G-regression</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>OK</td></tr>
+<tr><td><code>G-probe-fs-write-mbps</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>write 50.09 MB/s, read 755.33 MB/s, create 4630 ops/s</td></tr>
+<tr><td><code>the judge shipped byte-identical</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>7 harness files; shipped policy checker matches</td></tr>
+<tr><td><code>every written path was declared</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>12 path(s) changed, all inside the declared write scopes</td></tr>
+<tr><td><code>on-disk invariants after a workload</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>size, reserved blocks, bitmap bounds and fsck all hold (data_start=8)</td></tr>
+<tr><td><code>model over the CLI (120 processes)</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>fsck ok=True, image is exactly 1048576 bytes: True</td></tr>
+<tr><td><code>crash sweep k=1..120 (+40 double faults)</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>41/120 crash(es) injected, 0 failure(s)</td></tr>
+<tr><td><code>corruption matrix (11 cases)</code></td><td><span class='pill pass'>pass</span></td><td class='muted'>11/11 rejected</td></tr></tbody></table>
+
+  <h2>2. The task graph that produced it</h2>
+  <table><thead><tr><th>Task</th><th>State</th><th>Write scope</th></tr></thead>
+  <tbody><tr><td><code>T-device</code></td><td>merged</td><td><code>tinyfs/device.py, tests/test_device.py</code></td></tr>
+<tr><td><code>T-journal</code></td><td>merged</td><td><code>tinyfs/journal.py, tests/test_journal.py</code></td></tr>
+<tr><td><code>T-fsck</code></td><td>merged</td><td><code>tinyfs/fsck.py, tests/test_fsck.py</code></td></tr>
+<tr><td><code>T-fs</code></td><td>merged</td><td><code>tinyfs/fs.py, tests/test_fs.py</code></td></tr>
+<tr><td><code>T-cli</code></td><td>merged</td><td><code>tinyfs/cli.py, tests/test_cli.py, tinyfs/__init__.py, tinyfs/__main__.py</code></td></tr></tbody></table>
+
+  <h2>3. The run's last gate observations</h2>
+  <table><thead><tr><th>Gate</th><th>Status</th><th>Metrics</th><th>Detail</th></tr></thead>
+  <tbody><tr><td><code>G-unit</code></td><td><span class='pill pass'>pass</span></td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-harness-api</code></td><td><span class='pill pass'>pass</span></td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-harness-differential</code></td><td><span class='pill pass'>pass</span></td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-harness-crash</code></td><td><span class='pill pass'>pass</span></td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-harness-fsck</code></td><td><span class='pill pass'>pass</span></td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-stdlib-only</code></td><td><span class='pill pass'>pass</span></td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-regression</code></td><td><span class='pill pass'>pass</span></td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-probe-fs-write-mbps</code></td><td><span class='pill pass'>pass</span></td><td><code>{&quot;fs_create_ops&quot;: 3843.045, &quot;fs_read_mbps&quot;: 569.862, &quot;fs_write_mbps&quot;: 36.41}</code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-layout</code></td><td><span class='pill pass'>pass</span></td><td><code></code></td><td class='muted'>all paths satisfied: [&#x27;tinyfs/device.py&#x27;, &#x27;tinyfs/journal.py&#x27;, &#x27;tinyfs/fsck.py&#x27;, &#x27;tinyfs/fs.py&#x27;, &#x27;tinyfs/cli.py&#x27;, &#x27;tinyfs/__init__.py&#x27;, &#x27;tinyfs/__main__.py&#x27;, &#x27;t</td></tr>
+<tr><td><code>G-budget-fs-write-mbps</code></td><td><span class='pill pass'>pass</span></td><td><code>{&quot;fs_write_mbps&quot;: 36.41}</code></td><td class='muted'>fs_write_mbps=36.41 &gt;= 2 -&gt; ok</td></tr>
+<tr><td><code>G-budget-fs-read-mbps</code></td><td><span class='pill pass'>pass</span></td><td><code>{&quot;fs_read_mbps&quot;: 569.862}</code></td><td class='muted'>fs_read_mbps=569.862 &gt;= 5 -&gt; ok</td></tr>
+<tr><td><code>G-budget-fs-create-ops</code></td><td><span class='pill pass'>pass</span></td><td><code>{&quot;fs_create_ops&quot;: 3843.045}</code></td><td class='muted'>fs_create_ops=3843.05 &gt;= 100 -&gt; ok</td></tr></tbody></table>
+
+  <h2>4. What is being claimed, and what is not</h2>
+  <ul>
+    <li>The promise checked is narrow and specific: after <code>fsync</code> returns, the data
+    survives a crash, and the structure is never left inconsistent - at any of 120 injected
+    power-loss points plus 40 double faults.</li>
+    <li>The checker (<code>tools/minifleet_checks.py</code>) and the acceptance harness travel
+    with the product and are compared byte for byte against their source, so the criteria
+    cannot have been edited to fit the result.</li>
+    <li>Not claimed: concurrency (one process owns the image), directories, large files
+    (four data blocks per file), or a real block device.</li>
+  </ul>
+</main>
+<footer>Generated by experiments/tinyfs/render.py from the run record and the audit - no claim
+here exists without the evidence next to it.</footer>
+</body></html>

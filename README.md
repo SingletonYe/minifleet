@@ -93,6 +93,21 @@ definition of done: exact click counts under eight concurrent writers, no data l
 The acceptance harness (`intents/harness-linksvc/`) is written by the verification layer,
 not by the workers, and is committed before they start.
 
+## A systems artefact: a crash-consistent filesystem
+
+`intents/tinyfs.md` is a prose intent for a filesystem core - block device and layout, a
+write-ahead journal, a filesystem API, an independent fsck and a process boundary - judged by
+things a CRUD service never is: power-loss injection at block-write boundaries, a model-based
+differential test across remounts, a corruption matrix, and throughput budgets.
+
+- rendered result: <https://singletonye.github.io/minifleet/tinyfs.html>
+- the run's own report: <https://singletonye.github.io/minifleet/tinyfs-run.html>
+- the audit, from a clean export: `experiments/tinyfs/audit.json`
+
+Policy gates ship their checker with the product (`tools/minifleet_checks.py`), so a gate like
+"standard library only" runs on a bare `git archive` export with no fleet installation - which
+is what made the audit's clean-export check pass.
+
 ## The front door: a prose intent compiles into a checkable spec
 
 An intent written by hand is an intent nobody writes twice. `minifleet compile` reads a short

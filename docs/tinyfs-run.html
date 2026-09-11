@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang='en'><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>MiniFleet run report - tinyfs: a crash-consistent filesystem core</title>
+<style>
+:root { --bg:#0b0f14; --panel:#131a23; --line:#22303d; --ink:#e8eef5; --muted:#8ba0b4;
+        --ok:#3ddc97; --bad:#ff6b6b; --warn:#ffc857; --info:#57b8ff; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink);
+       font:15px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+header { padding:40px 28px 24px; border-bottom:1px solid var(--line);
+         background:linear-gradient(180deg,#101823,#0b0f14); }
+h1 { margin:0 0 6px; font-size:26px; letter-spacing:-.01em; }
+h2 { margin:36px 0 12px; font-size:18px; }
+h3 { margin:22px 0 8px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+.muted { color:var(--muted); }
+main { padding:24px 28px 64px; max-width:1180px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-top:18px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+.card .k { color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.08em; }
+.card .v { font-size:22px; font-weight:600; margin-top:4px; }
+table { width:100%; border-collapse:collapse; background:var(--panel);
+        border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+th,td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13.5px; }
+th { background:#0f1620; color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; }
+tr:last-child td { border-bottom:none; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; color:#cfe3ff; }
+.pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11.5px;
+        border:1px solid var(--line); background:#0f1620; }
+.pill.pass,.pill.verified,.pill.merged { color:var(--ok); border-color:#1d5c43; background:#0f2620; }
+.pill.fail,.pill.failed,.pill.error { color:var(--bad); border-color:#5c1d1d; background:#260f0f; }
+.pill.dispatched,.pill.submitted,.pill.incomplete,.pill.unproven { color:var(--warn); border-color:#5c4a1d; background:#26200f; }
+.pill.ready,.pill.pending { color:var(--info); border-color:#1d3c5c; background:#0f1c26; }
+ul { margin:8px 0; padding-left:20px; }
+footer { padding:18px 28px 40px; color:var(--muted); font-size:12.5px; border-top:1px solid var(--line); }
+</style></head>
+<body>
+<header>
+  <h1>MiniFleet run report</h1>
+  <div class='muted'>tinyfs: a crash-consistent filesystem core &middot; intent <code>tinyfs</code> &middot; run <code>20260911T125507Z-tinyfs-6cec72</code></div>
+  <div class='cards'>
+    <div class='card'><div class='k'>Status</div><div class='v'>passed</div></div>
+    <div class='card'><div class='k'>Criteria verified</div><div class='v'>5/5</div></div>
+    <div class='card'><div class='k'>Gates passed</div><div class='v'>16/17</div></div>
+    <div class='card'><div class='k'>Tasks</div><div class='v'>5</div></div>
+    <div class='card'><div class='k'>Plan repairs</div><div class='v'>0</div></div>
+  </div>
+</header>
+<main>
+  <h2>1. Intent as received</h2>
+  <p># tinyfs: a crash-consistent filesystem core
+
+A small filesystem that lives in one image file and keeps its structure intact across a
+power loss. The hard part is not the API, it is the promise: after `fsync` returns, the
+data is there, and after a crash the structure is never broken. That promise is what this
+intent is judged on - a random operation sequence is compared against a model across
+remounts, the writer is killed at block-write boundaries and the promises are checked
+afterwards, an independent fsck has to reject every corrupted image, and the filesystem
+has to stay inside its throughput budgets.
+
+## Deliverables
+
+- tinyfs/device.py - the block device, the on-disk layout, format_image and the block/inode allocator
+- tinyfs/journal.py - the write-ahead journal: append, commit, replay, clear
+- tinyfs/fsck.py - the independent structural checker: it reads the frozen byte format, never tinyfs/device.py
+- tinyfs/fs.py - the filesystem API everything else is written against | depends: device, journal
+- tinyfs/cli.py - the process boundary: mkfs, put, get, ls, rm, fsck, workload | depends: fsck
+- tinyfs/__init__.py - package marker and the public exports | of: cli
+- tinyfs/__main__.py - the `python3 -m tinyfs` entry point | of: cli
+- tests/test_device.py - the device writer&#x27;s own tests
+- tests/test_journal.py - the journal writer&#x27;s own tests
+- tests/test_fsck.py - the checker writer&#x27;s own tests
+- tests/test_fs.py - the API writer&#x27;s own tests
+- tests/test_cli.py - the CLI writer&#x27;s own tests
+
+## Acceptance
+
+- [harness:api] the documented API semantics hold: duplicates, missing names, name and size limits, disk full, and durability across a clean unmount
+- [harness:differential] a random operation sequence matches a model, including across remounts and after re-reading every file
+- [harness:crash] killing the writer at a block-write boundary never breaks the structure, and every fsync that had returned is honoured afterwards
+- [harness:fsck] fsck accepts a healthy image and rejects a corrupted one, saying why, without modifying the image
+- [policy] nothing outside the standard library is imported
+
+## Constraints
+
+- Python 3.12 standard library only
+- the on-disk format in the contract is frozen: the harness reads the image byte by byte and will not negotiate
+- harness/ is frozen: workers may read it, never modify it
+- the CLI must import tinyfs.fs and tinyfs.fsck lazily, inside its subcommand functions, so that cli.py can be built and tested before those modules land
+- a dependency is build-time coupling, not runtime coupling: fsck and cli may only depend on what they must *import to be written and unit-tested*. cli.py&#x27;s own tests cover the argument surface and never import tinyfs.fs; whether the CLI actually drives the filesystem is settled by the frozen harness, not by the worker
+
+## Out of scope
+
+- subdirectories, rename, permissions, ownership, symlinks
+- indirect blocks: a file is at most four data blocks
+- concurrency: one process at a time owns the image
+- a real block device: the image is a plain file
+
+## Budgets
+
+- fs_write_mbps &gt;= 2
+- fs_read_mbps &gt;= 5
+- fs_create_ops &gt;= 100
+
+## Probes
+
+- fs_write_mbps, fs_read_mbps, fs_create_ops: python3 -m harness.perf_probe
+
+## Harness
+
+- dir: harness-tinyfs
+- modules: test_api, test_differential, test_crash, test_fsck
+
+## Contract
+
+### Geometry
+
+- block size 4096 bytes, image length exactly `blocks * 4096`.
+- block 0: superblock, JSON, UTF-8, zero padded: `{&quot;magic&quot;: &quot;TINYFS1&quot;, &quot;block_size&quot;: 4096, &quot;blocks&quot;: N, &quot;inode_count&quot;: 64, &quot;journal_start&quot;: 1, &quot;journal_blocks&quot;: 3, &quot;inode_table_block&quot;: 4, &quot;bitmap_block&quot;: 5, &quot;data_start&quot;: 8, &quot;data_blocks&quot;: N - 8}`.
+- block 1: journal header, JSON, UTF-8, zero padded: `{&quot;magic&quot;: &quot;TINYFSJ1&quot;, &quot;seq&quot;: int, &quot;committed&quot;: bool, &quot;crc&quot;: int, &quot;payload_blocks&quot;: [slot, ...], &quot;homes&quot;: [home_block, ...]}` where slot is a journal block (2 or 3) and home is the block that payload belongs to.
+- blocks 2-3: journal payload, at most 2 blocks, raw bytes.
+- block 4: inode table, 64 inodes of 64 bytes each.
+- block 5: block bitmap, 4096 bytes; bit `i` describes data block `data_start + i`.
+- blocks 6-7: reserved, must stay zero.
+- blocks 8..: data blocks.
+
+### Inode layout (64 bytes, little endian)
+
+- `[0]` used (0 or 1), `[1]` kind (1 = file), `[2]` name_len (0..31), `[3]` padding
+- `[4:8]` size, `[8:12]` mtime (both unsigned 32 bit)
+- `[16:48]` name bytes, not NUL terminated
+- `[48:64]` four unsigned 32 bit data block indices; 0 means unused, a used block index is always &gt;= data_start
+
+### Limits
+
+- a name is 1 to 31 bytes, otherwise ValueError
+- a file is 0 to 16384 bytes, otherwise ValueError
+- an inode is allocated for the whole life of a file
+
+### tinyfs.device - frozen surface
+
+- `format_image(path: str, blocks: int) -&gt; None` writes a fresh, empty image.
+- `BlockDevice(path: str)` with `read_block(index: int) -&gt; bytes`, `write_block(index: int, data: bytes) -&gt; None`, `sync() -&gt; None`, `close() -&gt; None`, and a `blocks` attribute.
+- crash hook: every physical `write_block` increments a counter; when `TINYFS_CRASH_AFTER_WRITES` is set to K &gt; 0 and the counter reaches K, the process must call `os._exit(42)` immediately after that block write returns. A `sync()` must flush to the operating system.
+
+### tinyfs.journal - frozen surface
+
+- `append(device, entries: list[tuple[int, bytes]], seq: int) -&gt; None`, `commit(device) -&gt; None`, `replay(device) -&gt; bool`, `clear(device) -&gt; None`, `pending(device) -&gt; dict | None`.
+- entries are `(block_index, payload)` pairs; at most 2 payload blocks fit.
+- `crc` is `zlib.crc32` over the concatenated payload blocks, exactly as they are written.
+- `replay` applies the payload of a *committed* record whose crc matches, then clears it; it returns whether it applied anything. A committed record whose crc does not match is refused, never applied.
+
+### tinyfs.fs - frozen surface
+
+- `FileSystem.format(path: str, blocks: int = 256) -&gt; None` (classmethod)
+- `FileSystem.mount(path: str) -&gt; FileSystem` (classmethod): replays a committed journal before returning
+- `create(name: str) -&gt; None`, `write(name: str, data: bytes) -&gt; None`, `read(name: str) -&gt; bytes`, `unlink(name: str) -&gt; None`, `list() -&gt; list[tuple[str, int]]` (name, size, sorted by name), `fsync() -&gt; None`, `unmount() -&gt; None`
+- errors: `FileExistsError` on a duplicate name, `FileNotFoundError` on a missing one, `ValueError` on a bad name or an oversized file, `OSError` when the image has no free blocks
+- durability: after `fsync()` returns, every earlier mutation survives a crash; `unmount()` fsyncs
+- crash consistency: metadata reaches its home block only from a committed journal record, and the commit flag is written only after the payload has been synced
+- `unmount()` is idempotent; `list()` is ordered by name
+
+### tinyfs.fsck - frozen surface
+
+- `check(path: str) -&gt; dict` returning `{&quot;ok&quot;: bool, &quot;problems&quot;: list[str]}`; read only, it must not modify the image and must not replay the journal.
+- it reports: a bad magic or inconsistent geometry, an image whose length is wrong, an inode with a name longer than 31 bytes, an unknown kind, a size above the maximum, a block count that disagrees with the size, a block index outside the data area, two inodes sharing a block, a bitmap bit set for a block nobody references, a bitmap bit set outside the data area, and a committed journal header whose crc does not match its payload.
+
+### tinyfs.cli - frozen surface
+
+- `python3 -m tinyfs mkfs --image PATH [--blocks N]`
+- `python3 -m tinyfs put --image PATH --name NAME --data-file PATH [--fsync]`
+- `python3 -m tinyfs get --image PATH --name NAME [--out PATH]` (stdout when no --out)
+- `python3 -m tinyfs ls --image PATH` prints `&lt;name&gt; &lt;size&gt;` per line, sorted
+- `python3 -m tinyfs rm --image PATH --name NAME [--fsync]`
+- `python3 -m tinyfs fsck --image PATH` prints the `check()` JSON on stdout
+- `python3 -m tinyfs workload --image PATH --script PATH --progress PATH`
+- exit codes: 0 success, 1 a reported failure (message on stderr), 2 usage
+
+### workload script format
+
+A JSON list of operations, executed in order:
+
+- `{&quot;op&quot;: &quot;put&quot;, &quot;name&quot;: str, &quot;size&quot;: int, &quot;fsync&quot;: bool}` writes `payload_for(name, size)` - the bytes `(name.encode() * (size // len(name) + 1))[:size]` - creating the file when needed.
+- `{&quot;op&quot;: &quot;rm&quot;, &quot;name&quot;: str, &quot;fsync&quot;: bool}`
+- `{&quot;op&quot;: &quot;get&quot;, &quot;name&quot;: str}` re-reads the file and fails the process if the content differs.
+
+After an operation whose `fsync` is true, and after `fsync()` has returned, the workload appends one
+JSON line `{&quot;op&quot;: ..., &quot;name&quot;: ..., &quot;size&quot;: ...}` to the progress file, flushes it and fsyncs that
+file too. The progress file is the harness&#x27;s record of what the filesystem promised.
+
+## Meta
+
+- id: tinyfs
+- max_attempts: 3
+- max_rounds: 6
+- max_dispatches: 12
+- max_wall_seconds: 5400</p>
+  <h3>Deliverables</h3><ul><li>tinyfs/device.py - the block device, the on-disk layout, format_image and the block/inode allocator</li><li>tinyfs/journal.py - the write-ahead journal: append, commit, replay, clear</li><li>tinyfs/fsck.py - the independent structural checker: it reads the frozen byte format, never tinyfs/device.py</li><li>tinyfs/fs.py - the filesystem API everything else is written against | depends: device, journal</li><li>tinyfs/cli.py - the process boundary: mkfs, put, get, ls, rm, fsck, workload | depends: fsck</li><li>tinyfs/__init__.py - package marker and the public exports | of: cli</li><li>tinyfs/__main__.py - the `python3 -m tinyfs` entry point | of: cli</li><li>tests/test_device.py - the device writer&#x27;s own tests</li><li>tests/test_journal.py - the journal writer&#x27;s own tests</li><li>tests/test_fsck.py - the checker writer&#x27;s own tests</li><li>tests/test_fs.py - the API writer&#x27;s own tests</li><li>tests/test_cli.py - the CLI writer&#x27;s own tests</li></ul>
+  <h3>Constraints</h3><ul><li>Python 3.12 standard library only</li><li>the on-disk format in the contract is frozen: the harness reads the image byte by byte and will not negotiate</li><li>harness/ is frozen: workers may read it, never modify it</li><li>the CLI must import tinyfs.fs and tinyfs.fsck lazily, inside its subcommand functions, so that cli.py can be built and tested before those modules land</li><li>a dependency is build-time coupling, not runtime coupling: fsck and cli may only depend on what they must *import to be written and unit-tested*. cli.py&#x27;s own tests cover the argument surface and never import tinyfs.fs; whether the CLI actually drives the filesystem is settled by the frozen harness, not by the worker</li></ul>
+  <h3>Out of scope</h3><ul><li>subdirectories, rename, permissions, ownership, symlinks</li><li>indirect blocks: a file is at most four data blocks</li><li>concurrency: one process at a time owns the image</li><li>a real block device: the image is a plain file</li></ul>
+  <h2>2. Design and task graph</h2>
+  <p class='muted'>The architect froze 1 contract(s) and split the work into 5 single-writer tasks before any worker was dispatched.</p>
+  <svg viewBox='0 0 1080 176' width='100%' height='176' role='img' aria-label='task dependency graph'><path d='M270 54 C 270 76, 720 62, 720 84' stroke='#22303d' fill='none' stroke-width='1.5'/><path d='M810 54 C 810 76, 720 62, 720 84' stroke='#22303d' fill='none' stroke-width='1.5'/><path d='M540 54 C 540 76, 360 62, 360 84' stroke='#22303d' fill='none' stroke-width='1.5'/><g><rect x='171' y='6' width='198' height='48' rx='10' fill='#131a23' stroke='#3ddc97' stroke-width='1.5'/><text x='270' y='26' text-anchor='middle' fill='#e8eef5' font-family='ui-sans-serif' font-size='12.5'>T-device</text><text x='270' y='43' text-anchor='middle' fill='#8ba0b4' font-family='ui-sans-serif' font-size='11'>Device</text></g><g><rect x='441' y='6' width='198' height='48' rx='10' fill='#131a23' stroke='#3ddc97' stroke-width='1.5'/><text x='540' y='26' text-anchor='middle' fill='#e8eef5' font-family='ui-sans-serif' font-size='12.5'>T-fsck</text><text x='540' y='43' text-anchor='middle' fill='#8ba0b4' font-family='ui-sans-serif' font-size='11'>Fsck</text></g><g><rect x='711' y='6' width='198' height='48' rx='10' fill='#131a23' stroke='#3ddc97' stroke-width='1.5'/><text x='810' y='26' text-anchor='middle' fill='#e8eef5' font-family='ui-sans-serif' font-size='12.5'>T-journal</text><text x='810' y='43' text-anchor='middle' fill='#8ba0b4' font-family='ui-sans-serif' font-size='11'>Journal</text></g><g><rect x='261' y='84' width='198' height='48' rx='10' fill='#131a23' stroke='#3ddc97' stroke-width='1.5'/><text x='360' y='104' text-anchor='middle' fill='#e8eef5' font-family='ui-sans-serif' font-size='12.5'>T-cli</text><text x='360' y='121' text-anchor='middle' fill='#8ba0b4' font-family='ui-sans-serif' font-size='11'>Cli</text></g><g><rect x='621' y='84' width='198' height='48' rx='10' fill='#131a23' stroke='#3ddc97' stroke-width='1.5'/><text x='720' y='104' text-anchor='middle' fill='#e8eef5' font-family='ui-sans-serif' font-size='12.5'>T-fs</text><text x='720' y='121' text-anchor='middle' fill='#8ba0b4' font-family='ui-sans-serif' font-size='11'>Fs</text></g></svg>
+  <table><thead><tr><th>Task</th><th>Depends on</th><th>Write scope</th><th>State</th><th>Files</th></tr></thead>
+  <tbody><tr><td><code>T-device</code><br><span class='muted'>Device</span></td><td>-</td><td><code>tinyfs/device.py, tests/test_device.py</code></td><td><span class='pill pass'>merged</span></td><td>2</td></tr>
+<tr><td><code>T-journal</code><br><span class='muted'>Journal</span></td><td>-</td><td><code>tinyfs/journal.py, tests/test_journal.py</code></td><td><span class='pill pass'>merged</span></td><td>2</td></tr>
+<tr><td><code>T-fsck</code><br><span class='muted'>Fsck</span></td><td>-</td><td><code>tinyfs/fsck.py, tests/test_fsck.py</code></td><td><span class='pill pass'>merged</span></td><td>2</td></tr>
+<tr><td><code>T-fs</code><br><span class='muted'>Fs</span></td><td>T-device, T-journal</td><td><code>tinyfs/fs.py, tests/test_fs.py</code></td><td><span class='pill pass'>merged</span></td><td>2</td></tr>
+<tr><td><code>T-cli</code><br><span class='muted'>Cli</span></td><td>T-fsck</td><td><code>tinyfs/cli.py, tests/test_cli.py, tinyfs/__init__.py, tinyfs/__main__.py</code></td><td><span class='pill pass'>merged</span></td><td>4</td></tr></tbody></table>
+  <h3>Plan self-repairs</h3><ul><li>No repairs were needed.</li></ul>
+  <h2>3. Traceability: intent to evidence</h2>
+  <p class='muted'>Every acceptance criterion is tied to the gate that decided its fate. Nothing in this report is asserted without a row here.</p>
+  <table><thead><tr><th>Criterion</th><th>Statement</th><th>Owning tasks</th><th>Gate and observation</th></tr></thead>
+  <tbody><tr><td><code>A-1</code><br><span class='pill pass'>verified</span></td><td>the documented API semantics hold: duplicates, missing names, name and size limits, disk full, and durability across a clean unmount</td><td>T-device, T-journal, T-fsck, T-fs, T-cli</td><td><code>G-harness-api</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-2</code><br><span class='pill pass'>verified</span></td><td>a random operation sequence matches a model, including across remounts and after re-reading every file</td><td>T-device, T-journal, T-fsck, T-fs, T-cli</td><td><code>G-harness-differential</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-3</code><br><span class='pill pass'>verified</span></td><td>killing the writer at a block-write boundary never breaks the structure, and every fsync that had returned is honoured afterwards</td><td>T-device, T-journal, T-fsck, T-fs, T-cli</td><td><code>G-harness-crash</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-4</code><br><span class='pill pass'>verified</span></td><td>fsck accepts a healthy image and rejects a corrupted one, saying why, without modifying the image</td><td>T-device, T-journal, T-fsck, T-fs, T-cli</td><td><code>G-harness-fsck</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr>
+<tr><td><code>A-5</code><br><span class='pill pass'>verified</span></td><td>nothing outside the standard library is imported</td><td>T-device, T-journal, T-fsck, T-fs, T-cli</td><td><code>G-stdlib-only</code> <span class='pill pass'>pass</span><br><span class='muted'>exit=0 (expected [0])</span></td></tr></tbody></table>
+  <h2>4. Gate ledger</h2>
+  <table><thead><tr><th>Gate</th><th>Status</th><th>Duration</th><th>Metrics</th><th>Detail</th></tr></thead>
+  <tbody><tr><td><code>G-unit</code></td><td><span class='pill pass'>pass</span></td><td>0.12s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-unit</code></td><td><span class='pill pass'>pass</span></td><td>0.05s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-unit</code></td><td><span class='pill pass'>pass</span></td><td>0.09s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-unit</code></td><td><span class='pill pass'>pass</span></td><td>0.24s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-unit</code></td><td><span class='pill fail'>fail</span></td><td>0.47s</td><td><code></code></td><td class='muted'>exit=1 (expected [0]): Traceback (most recent call last): | AssertionError: &#x27;nope&#x27; not found in &#x27;Traceback (most recent call last):\n  File &quot;&lt;frozen runpy&gt;&quot;, line 198, in _run_module_as_main\n  File &quot;</td></tr>
+<tr><td><code>G-unit</code></td><td><span class='pill pass'>pass</span></td><td>0.86s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-harness-api</code></td><td><span class='pill pass'>pass</span></td><td>0.26s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-harness-differential</code></td><td><span class='pill pass'>pass</span></td><td>0.22s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-harness-crash</code></td><td><span class='pill pass'>pass</span></td><td>3.92s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-harness-fsck</code></td><td><span class='pill pass'>pass</span></td><td>0.73s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-stdlib-only</code></td><td><span class='pill pass'>pass</span></td><td>0.05s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-regression</code></td><td><span class='pill pass'>pass</span></td><td>0.85s</td><td><code></code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-probe-fs-write-mbps</code></td><td><span class='pill pass'>pass</span></td><td>0.24s</td><td><code>{&quot;fs_create_ops&quot;: 3843.045, &quot;fs_read_mbps&quot;: 569.862, &quot;fs_write_mbps&quot;: 36.41}</code></td><td class='muted'>exit=0 (expected [0])</td></tr>
+<tr><td><code>G-layout</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code></code></td><td class='muted'>all paths satisfied: [&#x27;tinyfs/device.py&#x27;, &#x27;tinyfs/journal.py&#x27;, &#x27;tinyfs/fsck.py&#x27;, &#x27;tinyfs/fs.py&#x27;, &#x27;tinyfs/cli.py&#x27;, &#x27;tinyfs/__init__.py&#x27;, &#x27;tinyfs/__main__.py&#x27;, &#x27;tests/test_device.py&#x27;, &#x27;tests/test_journa</td></tr>
+<tr><td><code>G-budget-fs-write-mbps</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;fs_write_mbps&quot;: 36.41}</code></td><td class='muted'>fs_write_mbps=36.41 &gt;= 2 -&gt; ok</td></tr>
+<tr><td><code>G-budget-fs-read-mbps</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;fs_read_mbps&quot;: 569.862}</code></td><td class='muted'>fs_read_mbps=569.862 &gt;= 5 -&gt; ok</td></tr>
+<tr><td><code>G-budget-fs-create-ops</code></td><td><span class='pill pass'>pass</span></td><td>0.00s</td><td><code>{&quot;fs_create_ops&quot;: 3843.045}</code></td><td class='muted'>fs_create_ops=3843.05 &gt;= 100 -&gt; ok</td></tr></tbody></table>
+  <h2>5. Not proven</h2>
+  <ul><li>Every acceptance criterion carries passing evidence from a gate.</li></ul>
+  <h2>6. Risks and architect decisions</h2>
+  <h3>Risks carried forward</h3><ul><li>wide task graph: integration cost grows with the number of writers</li></ul>
+  <h3>Decisions</h3><ul><li>acceptance criteria are owned by the verification layer, never by the worker that writes the code</li><li>every task has a single writer and a disjoint write scope; concurrency without ownership is a merge queue</li><li>frozen contracts: C-1</li></ul>
+</main>
+<footer>Generated by MiniFleet from the run ledger - no claim in this report exists without gate evidence.</footer>
+</body></html>

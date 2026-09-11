@@ -152,7 +152,7 @@
       "title": "no third-party imports",
       "kind": "cmd",
       "scope": "system",
-      "cmd": "PYTHONPATH=/home/user/workspace/minifleet:$PYTHONPATH python3 -m minifleet.checks stdlib-only --roots tinyfs --project tinyfs"
+      "cmd": "python3 tools/minifleet_checks.py stdlib-only --roots tinyfs --project tinyfs"
     },
     {
       "id": "G-regression",
@@ -399,6 +399,7 @@
     "5 components derived from the deliverables, each with a disjoint write scope",
     "the harness directory 'harness-tinyfs' came from the '## Harness' section",
     "the frozen harness became 4 system gate(s) over harness-tinyfs, attributed to cli, device, fs, fsck, journal",
-    "'standard library only' became an enforced import gate over tinyfs"
+    "'standard library only' became an enforced import gate over tinyfs",
+    "the checker is shipped into the product at tools/minifleet_checks.py, so the gate runs on a bare checkout with no fleet installation"
   ]
 }

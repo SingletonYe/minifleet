@@ -137,6 +137,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
     scheduler = Scheduler(run, run_dir, spec, design)
     baseline = baseline_files(spec, design)
     baseline.update(harness_files(args.intent, spec))
+    baseline.update(fleet_tools(design))
     baseline["INTENT.md"] = f"# Intent as received\n\n{_prose(raw)}\n\n```json\n{raw.strip()}\n```\n"
 
     brownfield = bool(spec.baseline_from)
@@ -646,6 +647,25 @@ def baseline_files(spec: IntentSpec, design: Design) -> dict[str, str]:
     return files
 
 
+def fleet_tools(design: Design) -> dict[str, str]:
+    """Ship the fleet's own policy checker into the product it is judging.
+
+    A gate that runs `python3 -m minifleet.checks` only works where the fleet is
+    installed - true for a self-hosting run, false everywhere else. The checker is
+    small, standard-library-only and read-only, so the honest fix is to ship it with
+    the product: the gate then runs on a bare checkout, and the audit can prove the
+    shipped copy is byte-identical to the fleet's.
+    """
+
+    from . import gatelib
+
+    policy_gates = {"G-stdlib-only", "G-no-network"}
+    if not any(gate.id in policy_gates for gate in design.gates):
+        return {}
+    source = Path(__file__).resolve().parent / "checks.py"
+    return {gatelib.POLICY_CHECKER: source.read_text()}
+
+
 def harness_files(intent_path: str, spec: IntentSpec) -> dict[str, str]:
     """Copy the frozen acceptance harness into the product baseline."""
 
@@ -656,9 +676,18 @@ def harness_files(intent_path: str, spec: IntentSpec) -> dict[str, str]:
         raise FileNotFoundError(f"harness_dir not found: {root}")
     files: dict[str, str] = {}
     for path in sorted(root.rglob("*")):
-        if path.is_file():
-            rel = path.relative_to(root).as_posix()
-            files[f"harness/{rel}"] = path.read_text()
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root)
+        # A harness is source, not build output: byte-compiled caches and anything
+        # that is not text must never travel into the product baseline.
+        if any(part == "__pycache__" for part in rel.parts) or path.suffix == ".pyc":
+            continue
+        try:
+            content = path.read_text()
+        except UnicodeDecodeError:
+            continue
+        files[f"harness/{rel.as_posix()}"] = content
     return files
 
 

@@ -109,12 +109,19 @@ def probe(metric: str, command: str, title: str = "", timeout: float = 900.0) ->
     }
 
 
-def _pythonpath(fleet_root: str) -> str:
-    return f"PYTHONPATH={fleet_root}:$PYTHONPATH " if fleet_root else ""
+POLICY_CHECKER = "tools/minifleet_checks.py"
 
 
 def stdlib_only(roots: list[str], allow: list[str] | None = None,
-                project: list[str] | None = None, fleet_root: str = "") -> dict[str, Any]:
+                project: list[str] | None = None,
+                checker: str = POLICY_CHECKER) -> dict[str, Any]:
+    """A gate that must run on a bare checkout of the product.
+
+    The checker travels with the product (``plan`` ships it into the baseline), so
+    the gate never depends on the fleet's own installation being importable - which
+    is true for a self-hosting run and false for every other product.
+    """
+
     argv = " ".join(roots)
     extra = ""
     if allow:
@@ -126,11 +133,12 @@ def stdlib_only(roots: list[str], allow: list[str] | None = None,
         "title": "no third-party imports",
         "kind": "cmd",
         "scope": "system",
-        "cmd": f"{_pythonpath(fleet_root)}python3 -m minifleet.checks stdlib-only --roots {argv}{extra}",
+        "cmd": f"python3 {checker} stdlib-only --roots {argv}{extra}",
     }
 
 
-def no_network(roots: list[str], allow: list[str] | None = None, fleet_root: str = "") -> dict[str, Any]:
+def no_network(roots: list[str], allow: list[str] | None = None,
+               checker: str = POLICY_CHECKER) -> dict[str, Any]:
     argv = " ".join(roots)
     extra = (" --allow " + " ".join(allow)) if allow else ""
     return {
@@ -138,7 +146,7 @@ def no_network(roots: list[str], allow: list[str] | None = None, fleet_root: str
         "title": "library code does not reach the network",
         "kind": "cmd",
         "scope": "system",
-        "cmd": f"{_pythonpath(fleet_root)}python3 -m minifleet.checks no-network --roots {argv}{extra}",
+        "cmd": f"python3 {checker} no-network --roots {argv}{extra}",
     }
 
 

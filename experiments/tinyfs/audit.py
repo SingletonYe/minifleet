@@ -32,6 +32,12 @@ import hashlib
 import json
 import os
 import random
+import sys
+
+# The audit imports the frozen driver straight from the source harness directory;
+# it must not leave byte-compiled caches there, or the next `plan` would try to
+# ship them into a product baseline.
+sys.dont_write_bytecode = True
 import shutil
 import subprocess
 import sys
@@ -69,13 +75,15 @@ OPS = [
     {"op": "put", "name": "dirty", "size": 8192, "fsync": False},
 ]
 
+POLICY_CHECKER = "tools/minifleet_checks.py"
+
 GATES = [
     ("harness: api", "python3 -m unittest harness.test_api -v"),
     ("harness: differential", "python3 -m unittest harness.test_differential -v"),
     ("harness: crash", "python3 -m unittest harness.test_crash -v"),
     ("harness: fsck", "python3 -m unittest harness.test_fsck -v"),
     ("regression suite", "python3 -m unittest discover -s tests"),
-    ("stdlib-only policy", "python3 -m minifleet.checks stdlib-only --roots tinyfs --project tinyfs"),
+    ("stdlib-only policy", f"python3 {POLICY_CHECKER} stdlib-only --roots tinyfs --project tinyfs"),
     ("perf probe", "python3 -m harness.perf_probe"),
 ]
 
@@ -128,13 +136,39 @@ def export_branch(tree: Path, destination: Path) -> None:
 
 
 # -- the four questions --------------------------------------------------
-def check_reproducible(tree: Path) -> tuple[list[dict], Path]:
-    """Export the branch and re-run every gate on the export."""
+def newest_run() -> Path:
+    runs = sorted(
+        (path for path in (REPO / "runs" / "tinyfs").glob("*") if (path / "run.json").exists()),
+        key=lambda path: (path / "run.json").stat().st_mtime,
+    )
+    if not runs:
+        raise SystemExit("no run found under runs/tinyfs/*/run.json")
+    return runs[-1]
+
+
+def gate_commands(run_dir: Path) -> list[tuple[str, str]]:
+    """The system gates exactly as the run declared them.
+
+    The audit re-runs the run's own gates rather than a list kept here: a copy of
+    the commands is a copy that drifts, and a drifted audit certifies the wrong
+    thing.
+    """
+
+    record = json.loads((run_dir / "run.json").read_text())
+    return [
+        (gate["id"], gate["cmd"])
+        for gate in record["design"]["gates"]
+        if gate.get("kind") == "cmd" and gate.get("scope") == "system"
+    ]
+
+
+def check_reproducible(run_dir: Path, tree: Path) -> tuple[list[dict], Path]:
+    """Export the branch and re-run the run's own gates on the export."""
 
     scratch = Path(tempfile.mkdtemp(prefix="tinyfs-export-"))
     export = scratch / "tree"
     export_branch(tree, export)
-    rows = [gate(name, cmd, export) for name, cmd in GATES]
+    rows = [gate(name, cmd, export) for name, cmd in gate_commands(run_dir)]
     shipped = {"gate": "clean export is self-contained",
                "ok": all(row["ok"] for row in rows),
                "detail": f"{sum(row['ok'] for row in rows)}/{len(rows)} gates pass on a git-archive export"}
@@ -147,15 +181,20 @@ def check_judge_untouched(tree: Path) -> dict:
     missing = sorted(set(frozen) - set(shipped))
     changed = sorted(rel for rel in set(frozen) & set(shipped) if frozen[rel] != shipped[rel])
     extra = sorted(set(shipped) - set(frozen))
-    ok = not missing and not changed and not extra
+    checker_source = REPO / "minifleet" / "checks.py"
+    checker_shipped = tree / POLICY_CHECKER
+    checker_ok = checker_shipped.exists() and checker_shipped.read_bytes() == checker_source.read_bytes()
+    ok = not missing and not changed and not extra and checker_ok
     return {
-        "gate": "frozen harness shipped byte-identical",
+        "gate": "the judge shipped byte-identical",
         "ok": ok,
         "detail": (
-            f"{len(frozen)} harness files match"
+            f"{len(frozen)} harness files"
             + (f"; changed: {changed}" if changed else "")
             + (f"; missing: {missing}" if missing else "")
             + (f"; added to the judge: {extra}" if extra else "")
+            + ("; shipped policy checker matches" if checker_ok
+               else f"; {POLICY_CHECKER} is missing or differs from the fleet's checks.py")
         ),
     }
 
@@ -498,10 +537,11 @@ def main() -> int:
     parser.add_argument("--keep-export", action="store_true")
     args = parser.parse_args()
 
-    tree = Path(args.tree).resolve() if args.tree else newest_tree()
+    run_dir = newest_run() if not args.tree else Path(args.tree).resolve().parent
+    tree = Path(args.tree).resolve() if args.tree else run_dir / "product"
     print(f"auditing {tree}\n")
 
-    rows, export = check_reproducible(tree)
+    rows, export = check_reproducible(run_dir, tree)
     # Everything below talks to the *export*, through the process boundary, so the
     # audit never accidentally verifies the worktrees the fleet was building in.
     os.chdir(export)
