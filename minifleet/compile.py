@@ -40,7 +40,7 @@ SECTION_RE = re.compile(r"^##\s+(.+?)\s*$")
 TITLE_RE = re.compile(r"^#\s+(.+?)\s*$")
 BULLET_RE = re.compile(r"^[-*]\s+(.*)$")
 METRIC_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*(<=|>=|<|>|==)\s*(-?\d+(?:\.\d+)?)\s*$")
-TAG_RE = re.compile(r"^\[([a-z-]+)\]\s*(.*)$")
+TAG_RE = re.compile(r"^\[([a-z:-]+)\]\s*(.*)$")
 PROSE_METRIC_PATTERNS = (
     (re.compile(r"under\s+(\d+(?:\.\d+)?)\s*(ms|milliseconds|s|seconds)", re.I), "latency"),
     (re.compile(r"at least\s+(\d+(?:\.\d+)?)\s*requests?\s+per\s+second", re.I), "rps"),

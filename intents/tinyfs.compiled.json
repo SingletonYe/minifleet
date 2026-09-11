@@ -38,45 +38,33 @@
   "acceptance": [
     {
       "id": "A-1",
-      "statement": "[harness:api] the documented API semantics hold: duplicates, missing names, name and size limits, disk full, and durability across a clean unmount",
+      "statement": "the documented API semantics hold: duplicates, missing names, name and size limits, disk full, and durability across a clean unmount",
       "kind": "functional",
       "gates": [
-        "G-harness-api",
-        "G-harness-crash",
-        "G-harness-differential",
-        "G-harness-fsck"
+        "G-harness-api"
       ]
     },
     {
       "id": "A-2",
-      "statement": "[harness:differential] a random operation sequence matches a model, including across remounts and after re-reading every file",
+      "statement": "a random operation sequence matches a model, including across remounts and after re-reading every file",
       "kind": "functional",
       "gates": [
-        "G-harness-api",
-        "G-harness-crash",
-        "G-harness-differential",
-        "G-harness-fsck"
+        "G-harness-differential"
       ]
     },
     {
       "id": "A-3",
-      "statement": "[harness:crash] killing the writer at a block-write boundary never breaks the structure, and every fsync that had returned is honoured afterwards",
+      "statement": "killing the writer at a block-write boundary never breaks the structure, and every fsync that had returned is honoured afterwards",
       "kind": "functional",
       "gates": [
-        "G-harness-api",
-        "G-harness-crash",
-        "G-harness-differential",
-        "G-harness-fsck"
+        "G-harness-crash"
       ]
     },
     {
       "id": "A-4",
-      "statement": "[harness:fsck] fsck accepts a healthy image and rejects a corrupted one, saying why, without modifying the image",
+      "statement": "fsck accepts a healthy image and rejects a corrupted one, saying why, without modifying the image",
       "kind": "functional",
       "gates": [
-        "G-harness-api",
-        "G-harness-crash",
-        "G-harness-differential",
         "G-harness-fsck"
       ]
     },
@@ -412,7 +400,6 @@
   "compile_notes": [
     "5 components derived from the deliverables, each with a disjoint write scope",
     "the frozen harness became 4 system gate(s) over harness-tinyfs, attributed to cli, device, fs, fsck, journal",
-    "'standard library only' became an enforced import gate over tinyfs",
-    "4 untagged acceptance criteria were bound to the frozen harness"
+    "'standard library only' became an enforced import gate over tinyfs"
   ]
 }
