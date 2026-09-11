@@ -12,9 +12,9 @@ has to stay inside its throughput budgets.
 
 - tinyfs/device.py - the block device, the on-disk layout, format_image and the block/inode allocator
 - tinyfs/journal.py - the write-ahead journal: append, commit, replay, clear
-- tinyfs/fsck.py - the independent structural checker | depends: device
+- tinyfs/fsck.py - the independent structural checker: it reads the frozen byte format, never tinyfs/device.py
 - tinyfs/fs.py - the filesystem API everything else is written against | depends: device, journal
-- tinyfs/cli.py - the process boundary: mkfs, put, get, ls, rm, fsck, workload | depends: fs, fsck
+- tinyfs/cli.py - the process boundary: mkfs, put, get, ls, rm, fsck, workload | depends: fsck
 - tinyfs/__init__.py - package marker and the public exports | of: cli
 - tinyfs/__main__.py - the `python3 -m tinyfs` entry point | of: cli
 - tests/test_device.py - the device writer's own tests
@@ -37,6 +37,7 @@ has to stay inside its throughput budgets.
 - the on-disk format in the contract is frozen: the harness reads the image byte by byte and will not negotiate
 - harness/ is frozen: workers may read it, never modify it
 - the CLI must import tinyfs.fs and tinyfs.fsck lazily, inside its subcommand functions, so that cli.py can be built and tested before those modules land
+- a dependency is build-time coupling, not runtime coupling: fsck and cli may only depend on what they must *import to be written and unit-tested*. cli.py's own tests cover the argument surface and never import tinyfs.fs; whether the CLI actually drives the filesystem is settled by the frozen harness, not by the worker
 
 ## Out of scope
 

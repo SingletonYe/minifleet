@@ -270,7 +270,13 @@ def compile_document(text: str) -> Compilation:
         if dependency not in known:
             raise CompileError(f"a deliverable depends on {dependency!r}, which is not one of the components")
 
-    harness_dir = meta.get("harness_dir", "")
+    # The frozen harness can be declared either as one key in `## Meta` or as the
+    # directory of the `## Harness` section that names its modules. Either way the
+    # baseline must carry it, or the harness gates have nothing to run against.
+    harness_section = key_values(sections.get("harness", []))
+    harness_dir = meta.get("harness_dir", "") or harness_section.get("dir", "")
+    if harness_dir and not meta.get("harness_dir"):
+        notes.append(f"the harness directory {harness_dir!r} came from the '## Harness' section")
     baseline_from = meta.get("baseline_from", "")
     contracts = contracts_from_sections(sections)
     for component in components:
@@ -281,6 +287,12 @@ def compile_document(text: str) -> Compilation:
     budgets = parse_budgets(sections, notes)
     probes = parse_probes(sections, budgets, notes)
     harness_gates = parse_harness(sections, sorted(known), notes)
+    # A `## Harness` section declares the gates *and* the directory they live in.
+    # The directory is what `plan` copies into the product baseline, so it has to
+    # travel with the gates: without it the run would declare system gates for a
+    # module that never reached the repository under construction.
+    if not harness_dir and harness_gates:
+        harness_dir = key_values(sections.get("harness", [])).get("dir", "")
     deploy = key_values(sections.get("deploy", []))
     service = key_values(sections.get("service", []))
     roots = project_roots(components)

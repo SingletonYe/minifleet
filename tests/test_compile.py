@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from minifleet import architect, checks, compile as compile_mod, intent as intent_mod
+from minifleet import architect, checks, cli, compile as compile_mod, intent as intent_mod
 
 DOCUMENT = """# Swarm: a webhook relay
 
@@ -96,6 +96,22 @@ class ParsingTest(unittest.TestCase):
         self.assertEqual(mapping["A-1"], ["G-harness"])
         self.assertEqual(mapping["A-2"], ["G-regression"])
         self.assertEqual(mapping["A-3"], ["G-stdlib-only"])
+
+    def test_a_harness_section_carries_its_directory_into_the_baseline(self):
+        # The `## Harness` section names the gates *and* the directory they live in.
+        # The directory is what `plan` copies into the product baseline, so declaring
+        # the gates without it would ship gates for a module that never arrives.
+        document = DOCUMENT.replace("- harness_dir: harness-relay\n", "")
+        document = document.replace(
+            "## Meta",
+            "## Harness\n\n- dir: harness-relay\n- modules: test_accept, test_crash\n\n## Meta",
+        )
+        data = compile_mod.compile_document(document).data
+        ids = {gate["id"] for gate in data["gates"]}
+        self.assertIn("G-harness-accept", ids)
+        self.assertIn("G-harness-crash", ids)
+        self.assertEqual(data["harness_dir"], "harness-relay")
+        self.assertEqual(intent_mod.IntentSpec.from_dict(data).harness_dir, "harness-relay")
 
     def test_unknown_tag_is_a_compile_error(self):
         document = DOCUMENT.replace("[policy]", "[telepathy]")
