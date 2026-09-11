@@ -115,13 +115,21 @@ def components_from_deliverables(
     """One component per delivered module, with its tests attached."""
 
     parsed: list[tuple[str, str, list[str]]] = []
+    attached: list[tuple[str, str]] = []
     for item in deliverables:
         path, _, description = item.partition(" - ")
         path = path.strip()
         depends: list[str] = []
+        owner = ""
+        if "| of:" in description:
+            description, _, raw_owner = description.partition("| of:")
+            owner = raw_owner.strip()
         if "| depends:" in description:
             description, _, raw_deps = description.partition("| depends:")
             depends = [dep.strip() for dep in raw_deps.split(",") if dep.strip()]
+        if owner:
+            attached.append((path, owner))
+            continue
         parsed.append((path, description.strip(), depends))
 
     modules = [(path, desc, deps) for path, desc, deps in parsed if not _is_test(path)]
@@ -153,6 +161,11 @@ def components_from_deliverables(
             notes.append(f"{test_path} had no module of the same name, so it became its own component")
         else:
             owner.owns.append(test_path)
+    for path, component_id in attached:
+        target = next((item for item in components if item.id == component_id), None)
+        if target is None:
+            raise CompileError(f"{path} says '| of: {component_id}', but there is no such component")
+        target.owns.append(path)
     if len(components) > 1:
         notes.append(
             f"{len(components)} components derived from the deliverables, each with a disjoint write scope"
@@ -267,12 +280,15 @@ def compile_document(text: str) -> Compilation:
     out_of_scope = bullets(sections.get("out of scope", [])) or bullets(sections.get("out-of-scope", []))
     budgets = parse_budgets(sections, notes)
     probes = parse_probes(sections, budgets, notes)
+    harness_gates = parse_harness(sections, sorted(known), notes)
     deploy = key_values(sections.get("deploy", []))
     service = key_values(sections.get("service", []))
     roots = project_roots(components)
 
     gates: list[dict[str, Any]] = [gatelib.unit_suite()]
-    if harness_dir:
+    if harness_gates:
+        gates.extend(harness_gates)
+    elif harness_dir:
         module = "harness.test_" + harness_dir.split("-")[-1]
         gates.append(gatelib.frozen_harness(module, attributed_to=sorted(known)))
     if service.get("dir"):
@@ -384,13 +400,18 @@ def parse_probes(sections: dict[str, list[str]], budgets: dict[str, tuple[str, f
                  notes: list[str]) -> list[dict[str, Any]]:
     probes: list[dict[str, Any]] = []
     for item in bullets(sections.get("probes", [])):
-        metric, _, command = item.partition(":")
-        metric, command = metric.strip(), command.strip()
-        if not metric or not command:
-            notes.append(f"probe line ignored (expected '<metric>: <command>'): {item}")
+        metrics, _, command = item.partition(":")
+        names = [name.strip() for name in metrics.split(",") if name.strip()]
+        command = command.strip()
+        if not names or not command:
+            notes.append(f"probe line ignored (expected '<metric>[, <metric>]: <command>'): {item}")
             continue
-        probes.append(gatelib.probe(metric, command))
-    produced = {gate["id"][len("G-probe-"):].replace("-", "_") for gate in probes}
+        probes.append(gatelib.probe(names[0], command, title="measure " + ", ".join(names)))
+    produced = {
+        name
+        for gate in probes
+        for name in gate["title"][len("measure "):].split(", ")
+    }
     for metric in budgets:
         if metric.startswith("deploy_") or metric in produced:
             continue
@@ -401,11 +422,39 @@ def parse_probes(sections: dict[str, list[str]], budgets: dict[str, tuple[str, f
     return probes
 
 
+def parse_harness(sections: dict[str, list[str]], components: list[str],
+                  notes: list[str]) -> list[dict[str, Any]]:
+    """One system gate per frozen harness module, attributed to the whole build."""
+
+    values = key_values(sections.get("harness", []))
+    directory = values.get("dir", "")
+    modules = split_list(values.get("modules")) or split_list(values.get("module"))
+    if not directory or not modules:
+        return []
+    attribution = split_list(values.get("attributed_to")) or components
+    gates: list[dict[str, Any]] = []
+    for module in modules:
+        name = module if module.startswith("test_") else f"test_{module}"
+        gates.append(
+            gatelib.frozen_harness(
+                f"harness.{name}",
+                attributed_to=attribution,
+            )
+        )
+        gates[-1]["id"] = "G-harness-" + name[len("test_"):].replace("_", "-")
+        gates[-1]["title"] = f"frozen harness: {directory}/{name}"
+    notes.append(
+        f"the frozen harness became {len(gates)} system gate(s) over {directory}, "
+        f"attributed to {', '.join(attribution)}"
+    )
+    return gates
+
+
 def build_acceptance(sections: dict[str, list[str]], gate_ids: set[str], harness_dir: str,
                      notes: list[str]) -> list[dict[str, Any]]:
     criteria: list[dict[str, Any]] = []
+    harness_gates = sorted(gid for gid in gate_ids if gid == "G-harness" or gid.startswith("G-harness-"))
     tag_to_gate = {
-        "harness": "G-harness",
         "regression": "G-regression",
         "unit": "G-unit",
         "policy": "G-stdlib-only",
@@ -418,15 +467,21 @@ def build_acceptance(sections: dict[str, list[str]], gate_ids: set[str], harness
         tag = match.group(1) if match else ""
         statement = (match.group(2) if match else item).strip()
         if tag:
-            gate_id = tag_to_gate.get(tag, "")
-            if gate_id not in gate_ids:
+            if tag == "harness":
+                gates = list(harness_gates)
+            elif tag.startswith("harness:"):
+                wanted = "G-harness-" + tag.split(":", 1)[1].strip().replace("_", "-")
+                gates = [wanted] if wanted in gate_ids else []
+            else:
+                gate_id = tag_to_gate.get(tag, "")
+                gates = [gate_id] if gate_id in gate_ids else []
+            if not gates:
                 raise CompileError(
                     f"acceptance [{tag}] does not map to a gate this document produces "
                     f"(it produced {sorted(gate_ids)})"
                 )
-            gates = [gate_id]
-        elif harness_dir:
-            gates = ["G-harness"]
+        elif harness_gates:
+            gates = list(harness_gates)
             untagged += 1
         else:
             gates = ["G-regression"]
