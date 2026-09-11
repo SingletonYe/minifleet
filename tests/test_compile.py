@@ -171,6 +171,45 @@ class ParsingTest(unittest.TestCase):
             compile_mod.compile_text(DOCUMENT, backend="llm", refiner=BadRefiner())
 
 
+class HarnessSectionTest(unittest.TestCase):
+    """A `## Harness` section is the single place the frozen harness is declared."""
+
+    SECTIONED = DOCUMENT.replace(
+        "## Meta\n\n- id: swarm-relay\n- harness_dir: harness-relay\n",
+        "## Harness\n\n- dir: harness-relay\n- modules: test_accept, test_restart\n\n"
+        "## Meta\n\n- id: swarm-relay\n",
+    )
+
+    def test_the_section_directory_becomes_the_harness_dir(self):
+        compilation = compile_mod.compile_document(self.SECTIONED)
+        self.assertEqual(compilation.data["harness_dir"], "harness-relay")
+        ids = {gate["id"] for gate in compilation.data["gates"]}
+        self.assertTrue({"G-harness-accept", "G-harness-restart"} <= ids)
+        self.assertTrue(any("## Harness" in note for note in compilation.notes))
+
+    def test_the_meta_key_still_wins_when_both_are_present(self):
+        both = self.SECTIONED.replace(
+            "- id: swarm-relay\n", "- id: swarm-relay\n- harness_dir: elsewhere\n"
+        )
+        self.assertEqual(compile_mod.compile_document(both).data["harness_dir"], "elsewhere")
+
+    def test_the_frozen_harness_is_copied_into_the_baseline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            frozen = root / "harness-relay"
+            frozen.mkdir()
+            (frozen / "test_accept.py").write_text("# frozen by the harness owner\n")
+            intent_path = root / "intent.md"
+            intent_path.write_text(self.SECTIONED)
+            spec = intent_mod.IntentSpec.from_dict(
+                compile_mod.compile_document(self.SECTIONED).data
+            )
+            files = cli.harness_files(str(intent_path), spec)
+            self.assertEqual(
+                files, {"harness/test_accept.py": "# frozen by the harness owner\n"}
+            )
+
+
 class PolicyCheckTest(unittest.TestCase):
     def test_stdlib_only_flags_a_third_party_import(self):
         with tempfile.TemporaryDirectory() as tmp:
