@@ -11,8 +11,10 @@ from harness import driver
 
 from tinyfs.fs import FileSystem
 
+"""The image holds 64 inodes, so each phase stays inside that budget."""
+
 FILES = 32
-SMALL = 200
+SMALL = 60
 
 
 def metric(name: str, value: float) -> None:
@@ -41,6 +43,11 @@ def main() -> int:
                     print(f"read-back mismatch for {name}", flush=True)
                     return 1
             read_seconds = time.perf_counter() - started
+
+            started = time.perf_counter()
+            for name in list(payloads):
+                fs.unlink(name)
+            fs.fsync()
 
             started = time.perf_counter()
             for index in range(SMALL):

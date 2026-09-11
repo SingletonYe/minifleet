@@ -113,13 +113,17 @@ def gate(name: str, cmd: str, tree: Path) -> dict:
 def export_branch(tree: Path, destination: Path) -> None:
     """A clean export of the integration branch: no worktrees, no caches, no run records."""
 
-    archive = sh("git archive --format=tar HEAD", tree)
-    if archive.returncode != 0:
-        raise SystemExit(f"git archive failed: {archive.stderr[:400]}")
     destination.mkdir(parents=True, exist_ok=True)
     tarball = destination.parent / "export.tar"
-    tarball.write_bytes(archive.stdout.encode("latin-1"))
-    sh(f"tar -xf {tarball} -C {destination}", destination)
+    with open(tarball, "wb") as handle:
+        proc = subprocess.run(["git", "archive", "--format=tar", "HEAD"],
+                              cwd=str(tree), stdout=handle, stderr=subprocess.PIPE)
+    if proc.returncode != 0:
+        raise SystemExit(f"git archive failed: {proc.stderr[:400]!r}")
+    proc = subprocess.run(["tar", "-xf", str(tarball), "-C", str(destination)],
+                          capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise SystemExit(f"tar failed: {proc.stderr[:400]}")
     tarball.unlink()
 
 
@@ -163,10 +167,9 @@ def check_scope(tree: Path, intent: Path) -> dict:
     declared = {path for component in spec["components"] for path in component["owns"]}
     frozen = {"ACCEPTANCE.md", "INTENT.md", "README.md", "contracts/C-1.md"}
     changed = {
-        line[3:].strip()
-        for line in sh("git diff --name-status $(git rev-list --max-parents=0 HEAD) HEAD", tree)
-        .stdout.splitlines()
-        if line.strip()
+        line.split("\t", 1)[1].strip()
+        for line in sh("git diff --name-status $(git rev-list --max-parents=0 HEAD) HEAD", tree).stdout.splitlines()
+        if line.strip() and "\t" in line
     }
     outside = sorted(
         path for path in changed

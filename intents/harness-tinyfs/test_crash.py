@@ -59,7 +59,7 @@ class CrashTest(unittest.TestCase):
                 # and the filesystem has to keep working afterwards
                 fs = FileSystem.mount(str(image))
                 try:
-                    if any(entry["name"] == "after" for entry in fs.list()):
+                    if any(name == "after" for name, _ in fs.list()):
                         fs.unlink("after")
                     fs.create("after")
                     fs.write("after", driver.payload_for("after", 5000))

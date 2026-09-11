@@ -67,7 +67,7 @@ has to stay inside its throughput budgets.
 
 - block size 4096 bytes, image length exactly `blocks * 4096`.
 - block 0: superblock, JSON, UTF-8, zero padded: `{"magic": "TINYFS1", "block_size": 4096, "blocks": N, "inode_count": 64, "journal_start": 1, "journal_blocks": 3, "inode_table_block": 4, "bitmap_block": 5, "data_start": 8, "data_blocks": N - 8}`.
-- block 1: journal header, JSON, UTF-8, zero padded: `{"magic": "TINYFSJ1", "seq": int, "committed": bool, "crc": int, "payload_blocks": [int, ...]}`.
+- block 1: journal header, JSON, UTF-8, zero padded: `{"magic": "TINYFSJ1", "seq": int, "committed": bool, "crc": int, "payload_blocks": [slot, ...], "homes": [home_block, ...]}` where slot is a journal block (2 or 3) and home is the block that payload belongs to.
 - blocks 2-3: journal payload, at most 2 blocks, raw bytes.
 - block 4: inode table, 64 inodes of 64 bytes each.
 - block 5: block bitmap, 4096 bytes; bit `i` describes data block `data_start + i`.

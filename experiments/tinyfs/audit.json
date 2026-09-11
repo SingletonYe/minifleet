@@ -1,0 +1,76 @@
+{
+  "tree": "/home/user/workspace/minifleet/runs/tinyfs/20260911T122938Z-tinyfs-96c783/product",
+  "rows": [
+    {
+      "gate": "clean export is self-contained",
+      "ok": false,
+      "detail": "6/7 gates pass on a git-archive export"
+    },
+    {
+      "gate": "harness: api",
+      "ok": true,
+      "detail": "OK"
+    },
+    {
+      "gate": "harness: differential",
+      "ok": true,
+      "detail": "OK"
+    },
+    {
+      "gate": "harness: crash",
+      "ok": true,
+      "detail": "OK"
+    },
+    {
+      "gate": "harness: fsck",
+      "ok": true,
+      "detail": "OK"
+    },
+    {
+      "gate": "regression suite",
+      "ok": true,
+      "detail": "OK"
+    },
+    {
+      "gate": "stdlib-only policy",
+      "ok": false,
+      "detail": "/usr/bin/python3: Error while finding module specification for 'minifleet.checks' (ModuleNotFoundError: No module named 'minifleet')"
+    },
+    {
+      "gate": "perf probe",
+      "ok": true,
+      "detail": "write 39.63 MB/s, read 673.27 MB/s, create 4598 ops/s"
+    },
+    {
+      "gate": "frozen harness shipped byte-identical",
+      "ok": true,
+      "detail": "7 harness files match"
+    },
+    {
+      "gate": "every written path was declared",
+      "ok": true,
+      "detail": "33 path(s) changed, all inside the declared write scopes"
+    },
+    {
+      "gate": "on-disk invariants after a workload",
+      "ok": true,
+      "detail": "size, reserved blocks, bitmap bounds and fsck all hold (data_start=8)"
+    },
+    {
+      "gate": "model over the CLI (120 processes)",
+      "ok": true,
+      "detail": "fsck ok=True, image is exactly 1048576 bytes: True"
+    },
+    {
+      "gate": "crash sweep k=1..60 (+20 double faults)",
+      "ok": true,
+      "detail": "41/60 crash(es) injected, 0 failure(s)",
+      "failures": []
+    },
+    {
+      "gate": "corruption matrix (11 cases)",
+      "ok": true,
+      "detail": "11/11 rejected"
+    }
+  ]
+}
